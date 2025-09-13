@@ -1,0 +1,131 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Racers.io</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div id="ui">
+      <div class="panel" id="browserPanel">
+        <h1>Racers.io</h1>
+        <div class="tabs">
+          <button class="tab active" data-tab="servers">Servers</button>
+          <button class="tab" data-tab="leaderboard">Leaderboard</button>
+          <button class="tab" data-tab="campaign">Campaign</button>
+          <button class="tab" data-tab="help">Help</button>
+          <button class="tab" data-tab="custom">Custom Servers</button>
+        </div>
+
+        <div id="tab-servers" class="tab-content">
+          <div class="row">
+            <div>
+              <label>Name</label>
+              <input id="nameInput" type="text" maxlength="16" placeholder="Your name" />
+            </div>
+            <div>
+              <label>Color</label>
+              <input id="colorInput" type="color" value="#2196F3" />
+            </div>
+          </div>
+          <div class="row">
+            <button id="refreshBtn">Refresh Servers</button>
+            <div class="spacer"></div>
+            <input id="roomNameInput" type="text" placeholder="Room name" />
+            <button id="createBtn">Create Room</button>
+          </div>
+          <div id="roomsList" class="list"></div>
+        </div>
+
+        <div id="tab-leaderboard" class="tab-content hidden">
+          <div id="globalLb" class="list" style="max-height:420px; overflow-y:auto;"></div>
+        </div>
+
+        <div id="tab-campaign" class="tab-content hidden">
+          <div id="campaignList" class="list"></div>
+        </div>
+
+        <div id="tab-help" class="tab-content hidden">
+          <div class="help">
+            <p><strong>Goal:</strong> Race for 5 minutes on a procedural track. Cross the start line to complete laps. Highest progress wins. Rooms start when 15 players join with a 10s countdown.</p>
+            <p><strong>Controls:</strong></p>
+            <ul>
+              <li>Throttle: W / Up Arrow</li>
+              <li>Brake / Reverse: S / Down Arrow</li>
+              <li>Steer: A/D or Left/Right Arrows</li>
+              <li>Reset to start: R</li>
+              <li>Zoom: Mouse wheel or +/- keys</li>
+              <li>Mobile: On-screen buttons appear automatically</li>
+            </ul>
+            <p><strong>Tips:</strong> Sliding and wall hits slow you by 50%. Follow the chevrons to stay on course. Use the minimap (top-right) to orient.</p>
+          </div>
+        </div>
+
+        <div id="tab-custom" class="tab-content hidden">
+          <h3>Create Custom Room</h3>
+          <div class="row">
+            <input id="cName" type="text" placeholder="Room name" style="flex:1" />
+            <input id="cPassword" type="text" placeholder="Password (optional)" />
+          </div>
+          <div class="row">
+            <label>Players</label>
+            <input id="cMaxPlayers" type="number" min="1" max="30" value="8" />
+            <label>Duration (min)</label>
+            <input id="cDuration" type="number" min="1" max="30" value="5" />
+            <label>Min start</label>
+            <input id="cMinPlayers" type="number" min="1" max="30" value="2" />
+          </div>
+          <div class="row">
+            <label>AI Count</label>
+            <input id="cAiCount" type="number" min="0" max="20" value="0" />
+            <label>AI Level</label>
+            <select id="cAiLevel">
+              <option value="easy">Easy</option>
+              <option value="medium" selected>Medium</option>
+              <option value="hard">Hard</option>
+              <option value="veryhard">Very Hard</option>
+            </select>
+            <button id="cCreateBtn">Create Custom Room</button>
+          </div>
+
+          <h3>Join Custom Room</h3>
+          <div class="row">
+            <input id="jRoomId" type="text" placeholder="Room ID" />
+            <input id="jPassword" type="text" placeholder="Password (if any)" />
+            <button id="jJoinBtn">Join</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="hud" class="hidden">
+      <div id="timer"></div>
+      <div id="leaderboard"></div>
+      <div id="lapCounter"></div>
+    </div>
+
+    <canvas id="game"></canvas>
+
+    <div id="speedDial" class="hidden">0</div>
+    <canvas id="minimap" class="hidden"></canvas>
+    <div id="touchControls" class="hidden">
+      <div class="tc-left">
+        <button id="btnLeft" class="tc-btn">◀</button>
+        <button id="btnRight" class="tc-btn">▶</button>
+      </div>
+      <div class="tc-right">
+        <button id="btnBrake" class="tc-btn">▮▮</button>
+        <button id="btnGas" class="tc-btn">▲</button>
+      </div>
+    </div>
+
+    <div id="chat" class="hidden">
+      <div id="chatLog"></div>
+      <input id="chatInput" type="text" placeholder="Press Enter to chat" maxlength="240" />
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/client.js"></script>
+  </body>
+  </html>
