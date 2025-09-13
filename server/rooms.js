@@ -47,10 +47,12 @@ class Rooms {
       let timeRemaining = 0;
       if (r.state === 'countdown' && r.countdownEndAt) timeRemaining = Math.max(0, r.countdownEndAt - now);
       else if (r.state === 'running' && r.raceEndAt) timeRemaining = Math.max(0, r.raceEndAt - now);
+      else if (r.state === 'finished' && r.finishedAt) timeRemaining = Math.max(0, (r.finishedAt + 10000) - now);
+      const humans = Array.from(r.players.values()).filter(p => !p.isBot).length;
       return {
         id: r.id,
         name: r.name,
-        players: r.players.size,
+        players: humans,
         maxPlayers: r.maxPlayers,
         timeRemaining,
         state: r.state,
@@ -99,11 +101,18 @@ class Rooms {
     const dt = Math.min(0.05, (now - this.lastTick) / 1000); // clamp dt to 50ms
     this.lastTick = now;
     const updates = [];
+    const toDelete = [];
     for (const room of this.rooms.values()) {
       room.tick(dt, now);
       const payload = room.snapshot(now);
       updates.push({ roomId: room.id, state: payload });
+      const humans = Array.from(room.players.values()).filter(p => !p.isBot).length;
+      if ((room.state === 'waiting' || room.state === 'finished') && humans === 0) {
+        // remove empty rooms
+        toDelete.push(room.id);
+      }
     }
+    for (const id of toDelete) this.rooms.delete(id);
     return updates;
   }
 }
@@ -501,19 +510,30 @@ class Room {
         for (const name of this.participants) this.stats.addRace(name);
         if (winner && this.participants.has(winner.name)) this.stats.addWin(winner.name);
       }
-      // Race finished — reset to waiting for next start
+      // Race finished — hold results for 10s before cleanup
+      this.state = 'finished';
+      this.finishedAt = now;
+      this.results = Array.from(this.players.values()).map(p => ({ id: p.id, name: p.name, laps: p.laps, bestLapMs: p.bestLapMs || 0 })).sort((a,b)=>{
+        const pa = this.players.get(a.id).progress;
+        const pb = this.players.get(b.id).progress;
+        return pb - pa;
+      });
+      return;
+    }
+    if (this.state === 'finished' && this.finishedAt && now >= this.finishedAt + 10000) {
+      // Reset to waiting with new track
       this.state = 'waiting';
       this.track = createTrack();
       this.countdownEndAt = null;
       this.raceEndAt = 0;
+      this.finishedAt = null;
+      this.results = null;
       for (const p of this.players.values()) {
         const spawn = this.spawnPoint();
         p.x = spawn.x; p.y = spawn.y; p.angle = spawn.angle;
         p.vx = 0; p.vy = 0; p.steerState = 0;
         p.lastTheta = spawn.theta; p.laps = 0; p.progress = 0;
       }
-      // Do not simulate further this tick
-      return;
     }
 
     // If not running, freeze players
@@ -774,6 +794,7 @@ class Room {
     let timeRemaining = 0;
     if (this.state === 'countdown' && this.countdownEndAt) timeRemaining = Math.max(0, this.countdownEndAt - now);
     else if (this.state === 'running' && this.raceEndAt) timeRemaining = Math.max(0, this.raceEndAt - now);
+    else if (this.state === 'finished' && this.finishedAt) timeRemaining = Math.max(0, (this.finishedAt + 10000) - now);
 
     return {
       now,
@@ -782,6 +803,8 @@ class Room {
       timeRemaining,
       track: this.track,
       players,
+      isCustom: !!this.isCustom,
+      results: this.state === 'finished' ? (this.results || []) : undefined,
       leaderboard: players.map(p => ({ id: p.id, name: p.name })),
     };
   }

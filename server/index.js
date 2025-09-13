@@ -126,6 +126,27 @@ io.on('connection', (socket) => {
     io.to(joinedRoomId).emit('chat', msg);
   });
 
+  // Custom restart (custom rooms only)
+  socket.on('custom_restart', () => {
+    if (!joinedRoomId) return;
+    const room = rooms.get(joinedRoomId);
+    if (!room || !room.isCustom) return;
+    const p = room.players.get(socket.id);
+    if (!p || p.isBot) return;
+    // Reset and begin a short countdown
+    room.state = 'waiting';
+    room.track = require('./track').createTrack();
+    room.countdownEndAt = Date.now() + 3000;
+    room.raceEndAt = 0;
+    room.finishedAt = null;
+    for (const pl of room.players.values()) {
+      const spawn = room.spawnPoint();
+      pl.x = spawn.x; pl.y = spawn.y; pl.angle = spawn.angle;
+      pl.vx = 0; pl.vy = 0; pl.steerState = 0; pl.brake = 0; pl.throttle = 0; pl.targetThrottle = 0; pl.throttleState = 0;
+      pl.lastTheta = spawn.theta; pl.laps = 0; pl.progress = 0;
+    }
+  });
+
   // (Voting removed)
 });
 

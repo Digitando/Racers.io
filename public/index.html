@@ -14,6 +14,7 @@
           <button class="tab active" data-tab="servers">Servers</button>
           <button class="tab" data-tab="leaderboard">Leaderboard</button>
           <button class="tab" data-tab="campaign">Campaign</button>
+          <button class="tab" data-tab="customize">Customizations</button>
           <button class="tab" data-tab="help">Help</button>
           <button class="tab" data-tab="custom">Custom Servers</button>
         </div>
@@ -31,6 +32,7 @@
           </div>
           <div class="row">
             <button id="refreshBtn">Refresh Servers</button>
+            <input id="searchRooms" type="text" placeholder="Search rooms" style="flex:1" />
             <div class="spacer"></div>
             <input id="roomNameInput" type="text" placeholder="Room name" />
             <button id="createBtn">Create Room</button>
@@ -46,6 +48,20 @@
           <div id="campaignList" class="list"></div>
         </div>
 
+        <div id="tab-customize" class="tab-content hidden">
+          <div class="row">
+            <div>
+              <label>Name</label>
+              <input id="nameInput" type="text" maxlength="16" placeholder="Your name" />
+            </div>
+            <div>
+              <label>Color</label>
+              <input id="colorInput" type="color" value="#2196F3" />
+            </div>
+            <button id="saveProfileBtn">Save</button>
+          </div>
+          <div class="muted">Your name and color are used in Servers, Custom, and Campaign.</div>
+        </div>
         <div id="tab-help" class="tab-content hidden">
           <div class="help">
             <p><strong>Goal:</strong> Race for 5 minutes on a procedural track. Cross the start line to complete laps. Highest progress wins. Rooms start when 15 players join with a 10s countdown.</p>
@@ -120,6 +136,17 @@
       </div>
     </div>
 
+    <div id="finishOverlay" class="overlayPanel hidden">
+      <div class="finishCard">
+        <h2>Race Finished</h2>
+        <div id="finishCountdown" class="muted" style="margin-bottom:8px;"></div>
+        <div id="finishResults" class="finishList"></div>
+        <div style="margin-top:12px; display:flex; gap:8px;">
+          <button id="finishBackBtn">Back to Browser</button>
+          <button id="finishRestartBtn" class="secondary">Restart</button>
+        </div>
+      </div>
+    </div>
     <div id="chat" class="hidden">
       <div id="chatLog"></div>
       <input id="chatInput" type="text" placeholder="Press Enter to chat" maxlength="240" />

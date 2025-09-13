@@ -166,6 +166,29 @@ button.secondary { background: #e0e0e0; color: #222; }
 }
 #centerOverlay.overlay.show { opacity: 1; }
 
+.overlayPanel {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.25);
+  z-index: 8;
+  pointer-events: all;
+}
+.finishCard {
+  width: min(520px, 92vw);
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.18);
+  padding: 16px;
+}
+.finishList { max-height: 260px; overflow-y: auto; }
+.finishRow { display:flex; gap:8px; align-items:center; padding:6px 0; border-bottom: 1px dashed #eee; }
+.finishRow .rank { width: 28px; text-align: right; color: var(--muted); }
+.finishRow .name { flex:1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.finishRow .time { color: var(--muted); }
+
 #leaderboard {
   max-width: 280px;
 }
@@ -225,11 +248,17 @@ button.secondary { background: #e0e0e0; color: #222; }
 .tc-right { right: 18px; flex-direction: column; }
 .tc-btn {
   pointer-events: all;
-  width: 64px; height: 64px;
+  width: 72px; height: 72px;
   border-radius: 50%;
   border: none;
-  background: rgba(255,255,255,0.9);
+  background: rgba(255,255,255,0.92);
   box-shadow: 0 6px 20px rgba(0,0,0,0.12);
   font-size: 22px; font-weight: 700;
 }
 .tc-btn:active { transform: scale(0.96); }
+.tc-btn.active { background: rgba(255,255,255,1); box-shadow: 0 8px 26px rgba(0,0,0,0.18); }
+
+@media (pointer: coarse) {
+  .tc-btn { width: 84px; height: 84px; font-size: 26px; }
+  .tc-left, .tc-right { bottom: 22px; }
+}

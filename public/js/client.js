@@ -3,6 +3,8 @@
   const roomsEl = $('#roomsList');
   const globalLbEl = document.getElementById('globalLb');
   const refreshBtn = $('#refreshBtn');
+  const searchRoomsInput = document.getElementById('searchRooms');
+  let lastRooms = [];
   const createBtn = $('#createBtn');
   const roomNameInput = $('#roomNameInput');
   const nameInput = $('#nameInput');
@@ -13,6 +15,8 @@
   const tabLeaderboard = document.getElementById('tab-leaderboard');
   const tabCampaign = document.getElementById('tab-campaign');
   const tabHelp = document.getElementById('tab-help');
+  const tabCustomize = document.getElementById('tab-customize');
+  const saveProfileBtn = document.getElementById('saveProfileBtn');
   const tabCustom = document.getElementById('tab-custom');
   // custom form elements
   const cName = document.getElementById('cName');
@@ -32,6 +36,11 @@
   const leaderboardEl = $('#leaderboard');
   const lapCounterEl = $('#lapCounter');
   const speedDialEl = $('#speedDial');
+  const finishOverlay = document.getElementById('finishOverlay');
+  const finishResultsEl = document.getElementById('finishResults');
+  const finishCountdownEl = document.getElementById('finishCountdown');
+  const finishBackBtn = document.getElementById('finishBackBtn');
+  let finishAutoTimer = null;
   const chatEl = document.getElementById('chat');
   const chatLogEl = document.getElementById('chatLog');
   const chatInputEl = document.getElementById('chatInput');
@@ -99,6 +108,7 @@
     if (tabCampaign) tabCampaign.classList.toggle('hidden', name !== 'campaign');
     if (tabCampaign) tabCampaign.classList.toggle('hidden', name !== 'campaign');
     if (tabHelp) tabHelp.classList.toggle('hidden', name !== 'help');
+    if (tabCustomize) tabCustomize.classList.toggle('hidden', name !== 'customize');
     if (tabCustom) tabCustom.classList.toggle('hidden', name !== 'custom');
     tabs.forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   }
@@ -127,12 +137,36 @@
   }
   async function startCampaign(eventId) {
     const playerName = (nameInput.value || '').trim() || 'Racer';
+    if (!playerName) { alert('Set your name in Customizations first.'); showTab('customize'); return; }
     const res = await fetch('/api/campaign/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: eventId, name: playerName }) });
     const data = await res.json();
     if (data && data.id) joinRoom(data.id);
   }
   // Preload campaign list
   if (campaignListEl) fetchCampaign();
+
+  // Profile persistence
+  function loadProfile() {
+    const n = localStorage.getItem('profileName') || '';
+    const c = localStorage.getItem('profileColor') || '#2196F3';
+    if (nameInput) nameInput.value = n;
+    if (colorInput) colorInput.value = c;
+    return { n, c };
+  }
+  function saveProfile() {
+    const n = (nameInput.value || '').trim();
+    const c = colorInput.value || '#2196F3';
+    localStorage.setItem('profileName', n);
+    localStorage.setItem('profileColor', c);
+    alert('Saved');
+  }
+  loadProfile();
+  if (saveProfileBtn) saveProfileBtn.addEventListener('click', saveProfile);
+  // Force first-time users to customize
+  (function enforceProfile(){
+    const { n } = loadProfile();
+    if (!n) showTab('customize');
+  })();
 
   // Custom room handlers
   if (cCreateBtn) {
@@ -190,6 +224,9 @@
   }
 
   function renderRooms(rooms) {
+    lastRooms = rooms || [];
+    const q = ((searchRoomsInput && searchRoomsInput.value) || '').toLowerCase();
+    if (q) rooms = lastRooms.filter(r => (r.name||'').toLowerCase().includes(q) || (r.id||'').toLowerCase().includes(q));
     roomsEl.innerHTML = '';
     if (!rooms || rooms.length === 0) {
       const empty = document.createElement('div');
@@ -228,6 +265,7 @@
     const res = await fetch('/api/rooms');
     renderRooms(await res.json());
   }
+  if (searchRoomsInput) searchRoomsInput.addEventListener('input', () => renderRooms(lastRooms));
 
   function renderGlobalLb(rows) {
     if (!globalLbEl) return;
@@ -259,7 +297,7 @@
   refreshBtn.addEventListener('click', fetchRooms);
   // Live lobby updates via Socket.IO
   try {
-    const lobbySocket = io('/lobby');
+    const lobbySocket = io('/lobby', { transports: ['websocket','polling'] });
     lobbySocket.on('rooms', (rooms) => renderRooms(rooms));
     lobbySocket.on('leaderboard', (rows) => renderGlobalLb(rows));
   } catch (e) { /* fallback to manual refresh if socket fails */ }
@@ -276,9 +314,14 @@
 
   let isSpectator = false;
   function joinRoom(roomId, opts = {}) {
+    const profile = loadProfile();
+    const profName = (nameInput && nameInput.value || profile.n || '').trim();
+    if (!profName) { alert('Please set your name in Customizations first.'); showTab('customize'); return; }
     const playerName = (nameInput.value || '').trim() || 'Racer';
     const color = colorInput.value || '#2196F3';
-    socket = io();
+    const isRailway = /railway\.app$/i.test(location.hostname) || location.hostname.includes('railway');
+    const transports = isRailway ? ['polling','websocket'] : ['websocket','polling'];
+    socket = io({ transports });
     socket.emit('join', { roomId, name: playerName, color, spectate: !!opts.spectate, password: opts.password }, (ack) => {
       if (!ack || !ack.ok) {
         alert('Failed to join: ' + (ack && ack.error));
@@ -304,6 +347,12 @@
         track = state.track;
         world.players = state.players;
         lastStateAt = performance.now();
+        // Finish overlay
+        if (world.state === 'finished') {
+          showFinish(state);
+        } else {
+          hideFinish();
+        }
         // Show chat only while waiting; hide and clear at countdown
         if (chatEl) {
           if (world.state === 'waiting') { chatEl.classList.remove('hidden'); }
@@ -360,13 +409,15 @@
     // Touch control helpers
     function bindHold(btn, down, up) {
       const start = (e) => { e.preventDefault(); down(); };
-      const end = (e) => { e.preventDefault(); up(); };
+      const end = (e) => { e.preventDefault(); up(); if (btn) btn.classList.remove('active'); };
       btn.addEventListener('touchstart', start, { passive: false });
       btn.addEventListener('touchend', end, { passive: false });
       btn.addEventListener('touchcancel', end, { passive: false });
       btn.addEventListener('mousedown', start);
       btn.addEventListener('mouseup', end);
       btn.addEventListener('mouseleave', end);
+      btn.addEventListener('mousedown', ()=>btn.classList.add('active'));
+      btn.addEventListener('touchstart', ()=>btn.classList.add('active'));
     }
     bindHold(btnLeft, () => { keys.add('a'); keysDown.add('a'); }, () => { keys.delete('a'); keysDown.delete('a'); });
     bindHold(btnRight, () => { keys.add('d'); keysDown.add('d'); }, () => { keys.delete('d'); keysDown.delete('d'); });
@@ -536,6 +587,30 @@
     // Minimap
     drawMinimap();
   }
+
+  function msToSec(ms) { return Math.max(0, Math.ceil(ms/1000)); }
+  function showFinish(state) {
+    if (!finishOverlay) return;
+    finishOverlay.classList.remove('hidden');
+    const results = (state && state.results) || [];
+    finishResultsEl.innerHTML = results.map((r,i)=>{
+      const best = r.bestLapMs ? ` • best ${msShort(r.bestLapMs)}`:'';
+      return `<div class="finishRow"><div class="rank">${i+1}</div><div class="name">${escapeHtml(r.name)}</div><div class="time">L${r.laps}${best}</div></div>`;
+    }).join('');
+    finishCountdownEl.textContent = `Returning in ${msToSec(state.timeRemaining)}s`;
+    if (finishAutoTimer) clearTimeout(finishAutoTimer);
+    finishAutoTimer = setTimeout(returnToBrowser, Math.max(1000, state.timeRemaining || 10000));
+  }
+  function hideFinish(){ if (finishOverlay) finishOverlay.classList.add('hidden'); if (finishAutoTimer) { clearTimeout(finishAutoTimer); finishAutoTimer=null; } }
+  function returnToBrowser(){
+    try { if (socket) socket.disconnect(); } catch(e) {}
+    socket = null; you = null; currentRoom = null; meLocal=null; meServer=null;
+    hudEl.classList.add('hidden'); speedDialEl.classList.add('hidden'); mini.classList.add('hidden');
+    hideFinish();
+    browserPanel.classList.remove('hidden');
+    fetchRooms();
+  }
+  if (finishBackBtn) finishBackBtn.addEventListener('click', returnToBrowser);
 
   // Drawing helpers
   function drawTrack(ctx, t) {
