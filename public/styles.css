@@ -176,6 +176,7 @@ button.secondary { background: #e0e0e0; color: #222; }
   z-index: 8;
   pointer-events: all;
 }
+.overlayPanel.hidden { display: none; }
 .finishCard {
   width: min(520px, 92vw);
   background: #fff;

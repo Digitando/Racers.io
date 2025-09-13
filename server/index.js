@@ -80,7 +80,7 @@ io.on('connection', (socket) => {
       spectator = !!spectate;
       if (!spectator) {
         // Validate and add player; may throw on bad password or capacity
-        room.addPlayer(socket, { name: String(name || 'Racer'), color: String(color || '#2196F3'), password });
+        room.addPlayer(socket, { name: String(name || 'Racer'), color: String(color || '#2196F3'), accent: String((payload && payload.accent) || '#ffffff'), shape: String((payload && payload.shape) || 'capsule'), password });
       }
       // Only join socket room after successful validation
       socket.join(roomId);

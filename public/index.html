@@ -21,16 +21,6 @@
 
         <div id="tab-servers" class="tab-content">
           <div class="row">
-            <div>
-              <label>Name</label>
-              <input id="nameInput" type="text" maxlength="16" placeholder="Your name" />
-            </div>
-            <div>
-              <label>Color</label>
-              <input id="colorInput" type="color" value="#2196F3" />
-            </div>
-          </div>
-          <div class="row">
             <button id="refreshBtn">Refresh Servers</button>
             <input id="searchRooms" type="text" placeholder="Search rooms" style="flex:1" />
             <div class="spacer"></div>
@@ -57,6 +47,17 @@
             <div>
               <label>Color</label>
               <input id="colorInput" type="color" value="#2196F3" />
+            </div>
+            <div>
+              <label>Accent</label>
+              <input id="accentInput" type="color" value="#ffffff" />
+            </div>
+            <div>
+              <label>Shape</label>
+              <select id="shapeSelect">
+                <option value="capsule" selected>Capsule</option>
+                <option value="wedge">Wedge</option>
+              </select>
             </div>
             <button id="saveProfileBtn">Save</button>
           </div>

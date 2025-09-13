@@ -17,6 +17,8 @@
   const tabHelp = document.getElementById('tab-help');
   const tabCustomize = document.getElementById('tab-customize');
   const saveProfileBtn = document.getElementById('saveProfileBtn');
+  const accentInput = document.getElementById('accentInput');
+  const shapeSelect = document.getElementById('shapeSelect');
   const tabCustom = document.getElementById('tab-custom');
   // custom form elements
   const cName = document.getElementById('cName');
@@ -136,7 +138,8 @@
     } catch (e) { /* ignore */ }
   }
   async function startCampaign(eventId) {
-    const playerName = (nameInput.value || '').trim() || 'Racer';
+    const prof = loadProfile();
+    const playerName = (prof.n || '').trim();
     if (!playerName) { alert('Set your name in Customizations first.'); showTab('customize'); return; }
     const res = await fetch('/api/campaign/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: eventId, name: playerName }) });
     const data = await res.json();
@@ -149,15 +152,35 @@
   function loadProfile() {
     const n = localStorage.getItem('profileName') || '';
     const c = localStorage.getItem('profileColor') || '#2196F3';
+    const a = localStorage.getItem('profileAccent') || '#ffffff';
+    const s = localStorage.getItem('profileShape') || 'capsule';
     if (nameInput) nameInput.value = n;
     if (colorInput) colorInput.value = c;
-    return { n, c };
+    if (accentInput) accentInput.value = a;
+    if (shapeSelect) shapeSelect.value = s;
+    return { n, c, a, s };
+  }
+  function getEffectiveProfile() {
+    let { n, c, a, s } = loadProfile();
+    const inputName = ((nameInput && nameInput.value) || '').trim();
+    const inputColor = (colorInput && colorInput.value) || '';
+    const inputAccent = (accentInput && accentInput.value) || '';
+    const inputShape = (shapeSelect && shapeSelect.value) || '';
+    if (!n && inputName) { n = inputName; localStorage.setItem('profileName', n); }
+    if (!c && inputColor) { c = inputColor; localStorage.setItem('profileColor', c); }
+    if (!a && inputAccent) { a = inputAccent; localStorage.setItem('profileAccent', a); }
+    if (!s && inputShape) { s = inputShape; localStorage.setItem('profileShape', s); }
+    return { n, c, a, s };
   }
   function saveProfile() {
     const n = (nameInput.value || '').trim();
     const c = colorInput.value || '#2196F3';
+    const a = (accentInput && accentInput.value) || '#ffffff';
+    const s = (shapeSelect && shapeSelect.value) || 'capsule';
     localStorage.setItem('profileName', n);
     localStorage.setItem('profileColor', c);
+    localStorage.setItem('profileAccent', a);
+    localStorage.setItem('profileShape', s);
     alert('Saved');
   }
   loadProfile();
@@ -314,15 +337,23 @@
 
   let isSpectator = false;
   function joinRoom(roomId, opts = {}) {
-    const profile = loadProfile();
-    const profName = (nameInput && nameInput.value || profile.n || '').trim();
-    if (!profName) { alert('Please set your name in Customizations first.'); showTab('customize'); return; }
-    const playerName = (nameInput.value || '').trim() || 'Racer';
-    const color = colorInput.value || '#2196F3';
+    const profile = getEffectiveProfile();
+    let profName = (profile.n || '').trim();
+    let profColor = profile.c || '#2196F3';
+    let profAccent = profile.a || '#ffffff';
+    let profShape = profile.s || 'capsule';
+    if (!profName) {
+      const entered = (prompt('Enter your name to play:') || '').trim();
+      if (!entered) { showTab('customize'); return; }
+      profName = entered; localStorage.setItem('profileName', profName); if (nameInput) nameInput.value = profName;
+    }
+    if (!profColor) { profColor = '#2196F3'; localStorage.setItem('profileColor', profColor); if (colorInput) colorInput.value = profColor; }
+    const playerName = profName; // always use saved profile name
+    const color = profColor;     // always use saved profile color
     const isRailway = /railway\.app$/i.test(location.hostname) || location.hostname.includes('railway');
     const transports = isRailway ? ['polling','websocket'] : ['websocket','polling'];
     socket = io({ transports });
-    socket.emit('join', { roomId, name: playerName, color, spectate: !!opts.spectate, password: opts.password }, (ack) => {
+    socket.emit('join', { roomId, name: playerName, color, accent: profAccent, shape: profShape, spectate: !!opts.spectate, password: opts.password }, (ack) => {
       if (!ack || !ack.ok) {
         alert('Failed to join: ' + (ack && ack.error));
         return;
@@ -347,9 +378,9 @@
         track = state.track;
         world.players = state.players;
         lastStateAt = performance.now();
-        // Finish overlay
+        // Finish overlay (humans only)
         if (world.state === 'finished') {
-          showFinish(state);
+          if (!isSpectator) showFinish(state); else hideFinish();
         } else {
           hideFinish();
         }
@@ -372,6 +403,8 @@
             angle: angleLerp(prev.angle, p.angle, 0.6),
             color: p.color,
             name: p.name,
+            accent: p.accent || '#ffffff',
+            shape: p.shape || 'capsule',
             laps: p.laps || 0,
             speed: p.speed || 0,
             throttle: !!p.throttle,
@@ -525,14 +558,14 @@
         const dy = meServer.y - meLocal.y;
         meLocal.x += dx * alpha; meLocal.y += dy * alpha;
         meLocal.angle = angleLerp(meLocal.angle, meServer.angle, alpha);
-        drawCar(ctx, meLocal.x, meLocal.y, meLocal.angle, e.color || '#000', { throttle: e.throttle, brake: e.brake });
+        drawCar(ctx, meLocal.x, meLocal.y, meLocal.angle, e.color || '#000', { throttle: e.throttle, brake: e.brake, accent: e.accent || '#fff', shape: e.shape || 'capsule' });
         // Drop skid marks when slipping
         if (meLocal.slip && meLocal.slip > 0.7) {
           skidMarks.push({ x: meLocal.x, y: meLocal.y, angle: meLocal.angle, life: 160 });
           if (skidMarks.length > SKID_MAX) skidMarks.splice(0, skidMarks.length - SKID_MAX);
         }
       } else {
-        drawCar(ctx, e.x, e.y, e.angle, e.color || '#000', { throttle: e.throttle, brake: e.brake });
+        drawCar(ctx, e.x, e.y, e.angle, e.color || '#000', { throttle: e.throttle, brake: e.brake, accent: e.accent || '#fff', shape: e.shape || 'capsule' });
       }
     }
 
@@ -891,6 +924,7 @@
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle);
+    const shape = (flags.shape || 'capsule');
     // Draw car oriented along +X (front is +X)
     const L = CAR_L; // length
     const W = CAR_W; // width
@@ -910,26 +944,42 @@
     // Body
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.moveTo(tx, -r);
-    ctx.lineTo(hx, -r);
-    ctx.arc(hx, 0, r, -Math.PI / 2, Math.PI / 2, false); // front semicircle
-    ctx.lineTo(tx, r);
-    ctx.arc(tx, 0, r, Math.PI / 2, -Math.PI / 2, false); // rear semicircle
-    ctx.closePath();
+    if (shape === 'wedge') {
+      ctx.moveTo(L/2, 0);
+      ctx.lineTo(0, -W/2);
+      ctx.lineTo(-L/2, -W/3);
+      ctx.lineTo(-L/2, W/3);
+      ctx.lineTo(0, W/2);
+      ctx.closePath();
+    } else {
+      ctx.moveTo(tx, -r);
+      ctx.lineTo(hx, -r);
+      ctx.arc(hx, 0, r, -Math.PI / 2, Math.PI / 2, false); // front semicircle
+      ctx.lineTo(tx, r);
+      ctx.arc(tx, 0, r, Math.PI / 2, -Math.PI / 2, false); // rear semicircle
+      ctx.closePath();
+    }
     ctx.fill();
     ctx.strokeStyle = 'rgba(0,0,0,0.2)';
     ctx.lineWidth = 1.2; ctx.stroke();
 
-    // Nose highlight (front)
-    ctx.globalAlpha = 0.9;
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    ctx.beginPath();
-    ctx.moveTo(L / 2, 0);
-    ctx.lineTo(hx, -r * 0.9);
-    ctx.lineTo(hx, r * 0.9);
-    ctx.closePath();
-    ctx.fill();
+    // Nose highlight / accent stripe
     ctx.globalAlpha = 1;
+    const accent = flags.accent || '#ffffff';
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    if (shape === 'wedge') {
+      ctx.moveTo(L/2, 0);
+      ctx.lineTo(L/2 - 10, -W*0.28);
+      ctx.lineTo(L/2 - 10, W*0.28);
+      ctx.closePath();
+    } else {
+      ctx.moveTo(L / 2, 0);
+      ctx.lineTo(hx, -r * 0.9);
+      ctx.lineTo(hx, r * 0.9);
+      ctx.closePath();
+    }
+    ctx.fill();
 
     // Windows
     ctx.fillStyle = 'rgba(0,0,0,0.25)';

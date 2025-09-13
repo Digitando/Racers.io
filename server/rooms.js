@@ -9,6 +9,7 @@ const RACE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
 const COUNTDOWN_MS = 10 * 1000; // 10 seconds
 const MIN_PLAYERS_TO_START = 15;
 const SNAPSHOT_RATE = 30; // Hz
+const AUTO_START_WAIT_MS = 2 * 60 * 1000; // 2 minutes
 
 // Physics constants
 const CAR_RADIUS = 12;
@@ -127,6 +128,7 @@ class Room {
     this.track = createTrack();
     this.countdownEndAt = null;
     this.raceEndAt = 0;
+    this.waitingSince = Date.now();
     this.stats = stats; // global stats instance
     this.participants = new Set();
     this.isCampaign = false;
@@ -155,10 +157,10 @@ class Room {
   getPlayerPublic(socketId) {
     const p = this.players.get(socketId);
     if (!p) return null;
-    return { id: p.id, name: p.name, color: p.color };
+    return { id: p.id, name: p.name, color: p.color, accent: p.accent, shape: p.shape };
   }
 
-  addPlayer(socket, { name, color, password }) {
+  addPlayer(socket, { name, color, accent, shape, password }) {
     if (this.password && String(password || '') !== String(this.password)) {
       throw new Error('Invalid password');
     }
@@ -179,6 +181,8 @@ class Room {
       id: socket.id,
       name,
       color,
+      accent: accent || '#ffffff',
+      shape: shape || 'capsule',
       x: spawn.x,
       y: spawn.y,
       angle: spawn.angle,
@@ -465,6 +469,7 @@ class Room {
       // Start the race
       this.state = 'running';
       this.raceEndAt = now + (this.raceDurationMs || RACE_DURATION_MS);
+      this.waitingSince = null;
       // Record participants for stats (humans only)
       this.participants = new Set(Array.from(this.players.values()).filter(p => !p.isBot).map(p => p.name));
       // Snap everyone to start line for a fair start
@@ -526,6 +531,7 @@ class Room {
       this.track = createTrack();
       this.countdownEndAt = null;
       this.raceEndAt = 0;
+      this.waitingSince = now;
       this.finishedAt = null;
       this.results = null;
       for (const p of this.players.values()) {
@@ -533,6 +539,16 @@ class Room {
         p.x = spawn.x; p.y = spawn.y; p.angle = spawn.angle;
         p.vx = 0; p.vy = 0; p.steerState = 0;
         p.lastTheta = spawn.theta; p.laps = 0; p.progress = 0;
+      }
+    }
+
+    // Auto-start after timeout with whoever is present
+    if (this.state === 'waiting') {
+      const humans = Array.from(this.players.values()).filter(p => !p.isBot).length;
+      if (humans >= 1 && this.waitingSince && (now - this.waitingSince) >= AUTO_START_WAIT_MS) {
+        this.state = 'countdown';
+        this.countdownEndAt = now + COUNTDOWN_MS;
+        this.waitingSince = null;
       }
     }
 
@@ -774,6 +790,8 @@ class Room {
       id: p.id,
       name: p.name,
       color: p.color,
+      accent: p.accent,
+      shape: p.shape,
       x: p.x,
       y: p.y,
       angle: p.angle,
