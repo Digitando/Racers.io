@@ -31,7 +31,20 @@
         </div>
 
         <div id="tab-leaderboard" class="tab-content hidden">
-          <div id="globalLb" class="list" style="max-height:420px; overflow-y:auto;"></div>
+          <div id="globalLbControls" class="gl-controls">
+            <input id="globalLbSearch" type="text" placeholder="Search player" autocomplete="off" />
+            <div class="gl-sort">
+              <button type="button" data-gl-sort="score">Score</button>
+              <button type="button" data-gl-sort="wins">Wins</button>
+              <button type="button" data-gl-sort="winRate">Win%</button>
+              <button type="button" data-gl-sort="avgLaps">Avg Laps</button>
+              <button type="button" data-gl-sort="bestLap">Best Lap</button>
+              <button type="button" data-gl-sort="races">Races</button>
+              <button type="button" data-gl-sort="name">Name</button>
+            </div>
+          </div>
+          <div id="globalLbSummary" class="gl-summary muted"></div>
+          <div id="globalLb" class="gl-list"></div>
         </div>
 
         <div id="tab-campaign" class="tab-content hidden">
@@ -42,7 +55,7 @@
           <div class="row">
             <div>
               <label>Name</label>
-              <input id="nameInput" type="text" maxlength="16" placeholder="Your name" />
+              <input id="nameInput" type="text" maxlength="10" placeholder="Your name" />
             </div>
             <div>
               <label>Color</label>
@@ -57,6 +70,11 @@
               <select id="shapeSelect">
                 <option value="capsule" selected>Capsule</option>
                 <option value="wedge">Wedge</option>
+                <option value="formula">Formula</option>
+                <option value="roadster">Roadster</option>
+                <option value="buggy">Buggy</option>
+                <option value="dragster">Dragster</option>
+                <option value="hover">Hovercraft</option>
               </select>
             </div>
             <button id="saveProfileBtn">Save</button>
@@ -120,6 +138,7 @@
       <div id="timer"></div>
       <div id="leaderboard"></div>
       <div id="lapCounter"></div>
+      <div id="bestLap"></div>
     </div>
 
     <canvas id="game"></canvas>

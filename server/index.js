@@ -8,7 +8,17 @@ const { makeEvents } = require('./campaign');
 
 let desiredPort = Number(process.env.PORT) || 3000;
 
+const SERVER_EMPTY_SHUTDOWN_MS = Number(process.env.SERVER_EMPTY_SHUTDOWN_MS) || 10_000;
+let lastActivityAt = null;
+let hasActivity = false;
+let shuttingDown = false;
+const markActivity = () => {
+  lastActivityAt = Date.now();
+  hasActivity = true;
+};
+
 const app = express();
+app.use((req, _res, next) => { markActivity(); next(); });
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
@@ -59,15 +69,26 @@ const io = new Server(server, {
   },
 });
 
+const getActiveSocketCount = () => {
+  if (!io) return 0;
+  const engineCount = io.engine && typeof io.engine.clientsCount === 'number' ? io.engine.clientsCount : 0;
+  const baseCount = io.sockets && io.sockets.sockets ? io.sockets.sockets.size : 0;
+  const lobbyCount = typeof lobby !== 'undefined' && lobby && lobby.sockets ? lobby.sockets.size : 0;
+  return Math.max(engineCount, baseCount, lobbyCount);
+};
+
 // Lobby namespace for server browser
 const lobby = io.of('/lobby');
 lobby.on('connection', (socket) => {
+  markActivity();
   // Send an immediate snapshot on connect
   socket.emit('rooms', rooms.list());
-  socket.emit('leaderboard', stats.listTop(20));
+  socket.emit('leaderboard', stats.listTop(100));
+  socket.on('disconnect', markActivity);
 });
 
 io.on('connection', (socket) => {
+  markActivity();
   let joinedRoomId = null;
   let spectator = false;
 
@@ -81,6 +102,7 @@ io.on('connection', (socket) => {
       if (!spectator) {
         // Validate and add player; may throw on bad password or capacity
         room.addPlayer(socket, { name: String(name || 'Racer'), color: String(color || '#2196F3'), accent: String((payload && payload.accent) || '#ffffff'), shape: String((payload && payload.shape) || 'capsule'), password });
+        markActivity();
       }
       // Only join socket room after successful validation
       socket.join(roomId);
@@ -109,9 +131,11 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    if (!joinedRoomId) return;
-    const room = rooms.get(joinedRoomId);
-    if (room) room.removePlayer(socket.id);
+    if (joinedRoomId) {
+      const room = rooms.get(joinedRoomId);
+      if (room) room.removePlayer(socket.id);
+    }
+    markActivity();
   });
 
   // Chat relay
@@ -181,7 +205,31 @@ setInterval(() => {
 // Emit rooms list to lobby clients at 1 Hz
 setInterval(() => {
   lobby.emit('rooms', rooms.list());
-  lobby.emit('leaderboard', stats.listTop(20));
+  lobby.emit('leaderboard', stats.listTop(100));
+}, 1000);
+
+const emptyServerWatch = setInterval(() => {
+  const now = Date.now();
+  const activeSockets = getActiveSocketCount();
+  const humanPlayers = rooms.totalHumans();
+
+  if (activeSockets > 0 || humanPlayers > 0) {
+    markActivity();
+    return;
+  }
+
+  if (!hasActivity || lastActivityAt === null) return;
+
+  if (!shuttingDown && now - lastActivityAt >= SERVER_EMPTY_SHUTDOWN_MS) {
+    shuttingDown = true;
+    console.log(`No active users for ${SERVER_EMPTY_SHUTDOWN_MS / 1000}s — shutting down.`);
+    clearInterval(emptyServerWatch);
+    io.close(() => {
+      server.close(() => process.exit(0));
+    });
+    // Fallback in case close callbacks never fire
+    setTimeout(() => process.exit(0), 2000).unref();
+  }
 }, 1000);
 
 // Graceful port binding with fallback
