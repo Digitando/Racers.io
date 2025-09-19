@@ -1,13 +1,138 @@
 const seedrandom = require('seedrandom');
 
+const TAU = Math.PI * 2;
+
 function clamp(x, a, b) {
   return Math.max(a, Math.min(b, x));
 }
 
 function angleDiff(a, b) {
-  let d = (a - b) % (Math.PI * 2);
-  if (d < -Math.PI) d += Math.PI * 2; else if (d > Math.PI) d -= Math.PI * 2;
+  let d = (a - b) % TAU;
+  if (d < -Math.PI) d += TAU; else if (d > Math.PI) d -= TAU;
   return d;
+}
+
+const FEATURE_TYPES = [
+  {
+    type: 'boost',
+    weight: 1.4,
+    arc: [TAU * 0.025, TAU * 0.08],
+    lane: (rng) => {
+      const span = 0.3 + rng() * 0.35;
+      const center = (rng() - 0.5) * 0.6;
+      return { center, span };
+    },
+    strength: [0.7, 1.2],
+  },
+  {
+    type: 'puddle',
+    weight: 1.1,
+    arc: [TAU * 0.03, TAU * 0.09],
+    lane: (rng) => {
+      const span = 0.18 + rng() * 0.35;
+      const edge = rng() < 0.5 ? -1 : 1;
+      const center = edge * (0.55 + rng() * 0.35);
+      return { center, span };
+    },
+    strength: [0.6, 1.0],
+  },
+  {
+    type: 'dirt',
+    weight: 1.0,
+    arc: [TAU * 0.05, TAU * 0.14],
+    lane: (rng) => {
+      const span = 0.45 + rng() * 0.3;
+      const center = (rng() - 0.5) * 0.4;
+      return { center, span };
+    },
+    strength: [0.5, 1.0],
+  },
+  {
+    type: 'ice',
+    weight: 0.7,
+    arc: [TAU * 0.04, TAU * 0.1],
+    lane: (rng) => {
+      const span = 0.25 + rng() * 0.35;
+      const center = (rng() - 0.5) * 0.5;
+      return { center, span };
+    },
+    strength: [0.6, 1.1],
+  },
+  {
+    type: 'tar',
+    weight: 0.6,
+    arc: [TAU * 0.03, TAU * 0.08],
+    lane: (rng) => {
+      const span = 0.2 + rng() * 0.25;
+      const center = (rng() < 0.5 ? -1 : 1) * (0.48 + rng() * 0.4);
+      return { center, span };
+    },
+    strength: [0.7, 1.1],
+  },
+  {
+    type: 'wind',
+    weight: 0.8,
+    arc: [TAU * 0.06, TAU * 0.16],
+    lane: (rng) => {
+      const span = 0.6 + rng() * 0.3;
+      const center = (rng() - 0.5) * 0.2;
+      return { center, span };
+    },
+    strength: [0.5, 1.0],
+    extra: (rng) => ({ direction: rng() < 0.5 ? -1 : 1 }),
+  },
+];
+
+function randRange(rng, min, max) {
+  return min + rng() * (max - min);
+}
+
+function pickWeighted(defs, rng) {
+  const total = defs.reduce((sum, d) => sum + (d.weight || 1), 0);
+  const roll = rng() * total;
+  let acc = 0;
+  for (const def of defs) {
+    acc += def.weight || 1;
+    if (roll <= acc) return def;
+  }
+  return defs[defs.length - 1];
+}
+
+function clampLaneBounds(min, max) {
+  const a = clamp(Math.min(min, max), -1, 1);
+  const b = clamp(Math.max(min, max), -1, 1);
+  if (b - a < 0.05) {
+    const mid = (a + b) / 2;
+    return { laneMin: clamp(mid - 0.03, -1, 1), laneMax: clamp(mid + 0.03, -1, 1) };
+  }
+  return { laneMin: a, laneMax: b };
+}
+
+function createSurfaceFeatures(rng) {
+  if (rng() > 0.8) return [];
+  const count = 2 + Math.floor(rng() * 4); // 2..5 features
+  const features = [];
+  for (let i = 0; i < count; i++) {
+    const def = pickWeighted(FEATURE_TYPES, rng);
+    const start = rng() * TAU;
+    const length = randRange(rng, def.arc[0], def.arc[1]);
+    const { center, span } = def.lane(rng);
+    const laneMinRaw = center - span / 2;
+    const laneMaxRaw = center + span / 2;
+    const { laneMin, laneMax } = clampLaneBounds(laneMinRaw, laneMaxRaw);
+    const strength = randRange(rng, def.strength[0], def.strength[1]);
+    const feature = {
+      type: def.type,
+      start,
+      length,
+      laneMin,
+      laneMax,
+      strength,
+    };
+    if (typeof def.extra === 'function') Object.assign(feature, def.extra(rng, feature));
+    features.push(feature);
+  }
+  return features;
 }
 
 function createCornerSegments(rng) {
@@ -61,11 +186,12 @@ function createTrack(seed) {
     noises.push({ amp, freq, phase });
   }
   const segments = createCornerSegments(rng);
+  const features = createSurfaceFeatures(rng);
   // Elliptical warp to break circularity
   const ellipseE = 0.12 + rng() * 0.26; // 0.12..0.38
   const ellipsePhi = rng() * Math.PI * 2;
   const startTheta = 0; // start/finish at theta=0 to align with lap logic
-  return { seed: seedStr, baseRadius, width, noises, segments, ellipseE, ellipsePhi, startTheta };
+  return { seed: seedStr, baseRadius, width, noises, segments, ellipseE, ellipsePhi, startTheta, features };
 }
 
 function segmentWindow(theta, seg) {

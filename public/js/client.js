@@ -50,6 +50,25 @@
   const finishBackBtn = document.getElementById('finishBackBtn');
   const bestLapEl = $('#bestLap');
   if (bestLapEl) bestLapEl.textContent = 'PB —';
+  if (bestLapEl) bestLapEl.classList.add('hidden');
+  if (lapCounterEl) lapCounterEl.classList.add('hidden');
+  if (hudEl) {
+    hudEl.style.background = 'linear-gradient(135deg, rgba(18,26,46,0.82), rgba(12,18,32,0.68))';
+    hudEl.style.backdropFilter = 'blur(12px)';
+    hudEl.style.borderRadius = '18px';
+    hudEl.style.boxShadow = '0 22px 48px rgba(2, 6, 14, 0.45)';
+  }
+  if (speedDialEl) {
+    speedDialEl.style.background = 'radial-gradient(circle at 30% 15%, rgba(255,255,255,0.18), rgba(12,18,32,0.92))';
+    speedDialEl.style.color = '#f6fbff';
+    speedDialEl.style.textShadow = '0 0 12px rgba(0, 200, 255, 0.65)';
+    speedDialEl.style.borderRadius = '50%';
+    speedDialEl.style.boxShadow = '0 10px 30px rgba(0,0,0,0.35)';
+  }
+  if (timerEl) {
+    timerEl.style.color = '#f6fbff';
+    timerEl.style.textShadow = '0 0 6px rgba(0, 160, 255, 0.55)';
+  }
   let finishAutoTimer = null;
   const chatEl = document.getElementById('chat');
   const chatLogEl = document.getElementById('chatLog');
@@ -60,10 +79,13 @@
   const mini = document.getElementById('minimap');
   const mctx = mini.getContext('2d');
   const touchEl = document.getElementById('touchControls');
-  const btnLeft = document.getElementById('btnLeft');
-  const btnRight = document.getElementById('btnRight');
-  const btnGas = document.getElementById('btnGas');
-  const btnBrake = document.getElementById('btnBrake');
+  const touchSteer = document.getElementById('touchSteer');
+  const joystickBase = touchSteer ? touchSteer.querySelector('.tc-joystick-base') : null;
+  const joystickThumb = touchSteer ? touchSteer.querySelector('.tc-joystick-thumb') : null;
+  const pedalAccel = document.getElementById('touchPedalAccel');
+  const pedalBrake = document.getElementById('touchPedalBrake');
+  const pedalAccelFill = pedalAccel ? pedalAccel.querySelector('.tc-pedal-fill') : null;
+  const pedalBrakeFill = pedalBrake ? pedalBrake.querySelector('.tc-pedal-fill') : null;
 
   const SHAPE_OPTIONS = [
     { value: 'capsule', label: 'Capsule' },
@@ -142,11 +164,227 @@
   let simAcc = 0;
   // Visual caches
   let asphaltPattern = null;
-  let noiseCanvas = null;
   // Skid marks (your car)
   const skidMarks = [];
   const SKID_MAX = 700;
   const CAR_L = 44, CAR_W = 22;
+  const TAU = Math.PI * 2;
+
+  const FEATURE_STYLES = {
+    boost: { fill: 'rgba(0, 214, 170, 0.32)', stroke: 'rgba(0, 166, 136, 0.85)' },
+    puddle: { fill: 'rgba(64, 131, 255, 0.32)', stroke: 'rgba(22, 92, 214, 0.8)' },
+    dirt: { fill: 'rgba(178, 118, 64, 0.38)', stroke: 'rgba(140, 84, 36, 0.85)' },
+    ice: { fill: 'rgba(164, 214, 255, 0.32)', stroke: 'rgba(110, 168, 235, 0.75)' },
+    tar: { fill: 'rgba(47, 34, 34, 0.45)', stroke: 'rgba(72, 50, 45, 0.9)' },
+    wind: { fill: 'rgba(156, 120, 255, 0.28)', stroke: 'rgba(123, 82, 231, 0.85)' },
+    default: { fill: 'rgba(255, 255, 255, 0.25)', stroke: 'rgba(200, 200, 200, 0.7)' },
+  };
+  const FEATURE_TEXTURE_KEYS = {
+    boost: 'surface:boost',
+    puddle: 'surface:water',
+    dirt: 'surface:dirt',
+    ice: 'surface:ice',
+    tar: 'surface:tar',
+    wind: 'surface:wind',
+  };
+  const BG_COLORS = {
+    top: '#0d1424',
+    mid: '#182440',
+    bottom: '#2c3f6b',
+    glow: 'rgba(255, 255, 255, 0.09)'
+  };
+  let backgroundGradient = null;
+  let backgroundSize = { w: 0, h: 0 };
+
+  let touchSteerValue = 0;
+  let touchSteerActive = false;
+  let touchThrottleValue = 0;
+  let touchThrottleActive = false;
+  let touchBrakeValue = 0;
+  let touchBrakeActive = false;
+  let steerTouchId = null;
+  let throttleTouchId = null;
+  let brakeTouchId = null;
+  const TEXTURE_CACHE = new Map();
+
+  function createPattern(size, draw) {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const g = canvas.getContext('2d');
+    draw(g, size);
+    return g.createPattern(canvas, 'repeat');
+  }
+
+  function ensureTexture(key, factory) {
+    if (TEXTURE_CACHE.has(key)) return TEXTURE_CACHE.get(key);
+    const pattern = factory();
+    TEXTURE_CACHE.set(key, pattern);
+    return pattern;
+  }
+
+  function getTexture(key) {
+    switch (key) {
+      case 'asphalt':
+        return ensureTexture('asphalt', () => createPattern(256, (g, s) => {
+          g.fillStyle = '#2d3035';
+          g.fillRect(0, 0, s, s);
+          const grad = g.createLinearGradient(0, 0, s, s);
+          grad.addColorStop(0, 'rgba(255,255,255,0.04)');
+          grad.addColorStop(1, 'rgba(0,0,0,0.18)');
+          g.fillStyle = grad;
+          g.fillRect(0, 0, s, s);
+          for (let i = 0; i < 1500; i++) {
+            const x = Math.random() * s;
+            const y = Math.random() * s;
+            const alpha = Math.random() * 0.08;
+            const tone = 160 + Math.random() * 60;
+            g.fillStyle = `rgba(${tone},${tone},${tone},${alpha})`;
+            g.fillRect(x, y, 1, 1);
+          }
+          g.strokeStyle = 'rgba(70,70,78,0.22)';
+          g.lineWidth = 2;
+          for (let i = 0; i < 10; i++) {
+            g.beginPath();
+            g.moveTo(Math.random() * s, 0);
+            g.lineTo(Math.random() * s, s);
+            g.stroke();
+          }
+        }));
+      case 'grass':
+        return ensureTexture('grass', () => createPattern(256, (g, s) => {
+          const base = g.createLinearGradient(0, 0, 0, s);
+          base.addColorStop(0, '#4f7b2a');
+          base.addColorStop(1, '#2d5712');
+          g.fillStyle = base;
+          g.fillRect(0, 0, s, s);
+          g.lineWidth = 1;
+          for (let i = 0; i < 2200; i++) {
+            const x = Math.random() * s;
+            const y = Math.random() * s;
+            const len = 6 + Math.random() * 10;
+            const angle = Math.random() * Math.PI * 2;
+            const hue = 90 + Math.random() * 30;
+            g.strokeStyle = `hsla(${hue},50%,${40 + Math.random() * 10}%,0.45)`;
+            g.beginPath();
+            g.moveTo(x, y);
+            g.lineTo(x + Math.cos(angle) * len, y + Math.sin(angle) * len);
+            g.stroke();
+          }
+        }));
+      case 'surface:dirt':
+        return ensureTexture('surface:dirt', () => createPattern(192, (g, s) => {
+          g.fillStyle = '#5f4729';
+          g.fillRect(0, 0, s, s);
+          for (let i = 0; i < 1200; i++) {
+            const x = Math.random() * s;
+            const y = Math.random() * s;
+            const r = Math.random() * 2 + 0.5;
+            const alpha = 0.1 + Math.random() * 0.15;
+            const hue = 32 + Math.random() * 8;
+            g.fillStyle = `hsla(${hue},40%,40%,${alpha})`;
+            g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+          }
+          g.strokeStyle = 'rgba(0,0,0,0.08)';
+          g.lineWidth = 1;
+          for (let i = 0; i < 180; i++) {
+            g.beginPath();
+            g.moveTo(Math.random() * s, Math.random() * s);
+            g.lineTo(Math.random() * s, Math.random() * s);
+            g.stroke();
+          }
+        }));
+      case 'surface:ice':
+        return ensureTexture('surface:ice', () => createPattern(192, (g, s) => {
+          const grad = g.createLinearGradient(0, 0, s, s);
+          grad.addColorStop(0, '#d8f5ff');
+          grad.addColorStop(1, '#8cc2ff');
+          g.fillStyle = grad;
+          g.fillRect(0, 0, s, s);
+          g.strokeStyle = 'rgba(255,255,255,0.25)';
+          g.lineWidth = 1.2;
+          for (let i = 0; i < 140; i++) {
+            g.beginPath();
+            g.moveTo(Math.random() * s, Math.random() * s);
+            g.lineTo(Math.random() * s, Math.random() * s);
+            g.stroke();
+          }
+          g.globalAlpha = 0.25;
+          for (let i = 0; i < 40; i++) {
+            const x = Math.random() * s;
+            const y = Math.random() * s;
+            const r = 6 + Math.random() * 20;
+            const grad2 = g.createRadialGradient(x, y, 0, x, y, r);
+            grad2.addColorStop(0, 'rgba(255,255,255,0.4)');
+            grad2.addColorStop(1, 'rgba(255,255,255,0)');
+            g.fillStyle = grad2;
+            g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+          }
+          g.globalAlpha = 1;
+        }));
+      case 'surface:tar':
+        return ensureTexture('surface:tar', () => createPattern(192, (g, s) => {
+          g.fillStyle = '#1c1619';
+          g.fillRect(0, 0, s, s);
+          g.strokeStyle = 'rgba(120,80,60,0.18)';
+          g.lineWidth = 3;
+          for (let i = 0; i < 40; i++) {
+            g.beginPath();
+            const x = Math.random() * s;
+            const y = Math.random() * s;
+            g.bezierCurveTo(x, y, x + 20, y + 8, x + 10, y + 28);
+            g.stroke();
+          }
+        }));
+      case 'surface:water':
+        return ensureTexture('surface:water', () => createPattern(192, (g, s) => {
+          const base = g.createLinearGradient(0, 0, s, s);
+          base.addColorStop(0, 'rgba(70,140,255,0.6)');
+          base.addColorStop(1, 'rgba(20,60,180,0.6)');
+          g.fillStyle = base;
+          g.fillRect(0, 0, s, s);
+          g.strokeStyle = 'rgba(255,255,255,0.28)';
+          g.lineWidth = 1;
+          for (let i = 0; i < 60; i++) {
+            const cx = Math.random() * s;
+            const cy = Math.random() * s;
+            const r = 12 + Math.random() * 28;
+            g.beginPath();
+            g.arc(cx, cy, r, 0, Math.PI * 2);
+            g.stroke();
+          }
+        }));
+      case 'surface:boost':
+        return ensureTexture('surface:boost', () => createPattern(128, (g, s) => {
+          g.fillStyle = 'rgba(0, 80, 60, 0.55)';
+          g.fillRect(0, 0, s, s);
+          g.strokeStyle = 'rgba(0, 255, 170, 0.65)';
+          g.lineWidth = 3;
+          for (let i = 0; i < 6; i++) {
+            g.beginPath();
+            const y = (i / 6) * s;
+            g.moveTo(0, y);
+            g.lineTo(s, y + 10);
+            g.stroke();
+          }
+        }));
+      case 'surface:wind':
+        return ensureTexture('surface:wind', () => createPattern(160, (g, s) => {
+          g.fillStyle = 'rgba(120, 100, 200, 0.35)';
+          g.fillRect(0, 0, s, s);
+          g.strokeStyle = 'rgba(220, 200, 255, 0.4)';
+          g.lineWidth = 2;
+          for (let i = 0; i < 24; i++) {
+            g.beginPath();
+            const y = Math.random() * s;
+            g.moveTo(-20, y);
+            g.quadraticCurveTo(s * 0.5, y + 20 * (Math.random() - 0.5), s + 20, y);
+            g.stroke();
+          }
+        }));
+      default:
+        return null;
+    }
+  }
 
   function fitCanvas() {
     const dpr = window.devicePixelRatio || 1;
@@ -161,9 +399,24 @@
     mini.width = Math.round(mw * dpr);
     mini.height = Math.round(mh * dpr);
     mctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    backgroundGradient = null;
   }
   window.addEventListener('resize', fitCanvas);
   fitCanvas();
+
+  function ensureBackgroundGradient() {
+    const w = canvas.width;
+    const h = canvas.height;
+    if (!backgroundGradient || backgroundSize.w !== w || backgroundSize.h !== h) {
+      const grad = ctx.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, BG_COLORS.top);
+      grad.addColorStop(0.45, BG_COLORS.mid);
+      grad.addColorStop(1, BG_COLORS.bottom);
+      backgroundGradient = grad;
+      backgroundSize = { w, h };
+    }
+    return backgroundGradient;
+  }
 
   function getStoredProfile() {
     const rawName = localStorage.getItem('profileName') || '';
@@ -572,6 +825,8 @@
       hudEl.classList.remove('hidden');
       speedDialEl.classList.remove('hidden');
       mini.classList.remove('hidden');
+      if (bestLapEl) bestLapEl.classList.remove('hidden');
+      if (lapCounterEl) lapCounterEl.classList.remove('hidden');
       if (chatEl && ack.chat) { chatLogEl.innerHTML=''; ack.chat.forEach(appendChat); }
       // Show touch controls on touch devices
       if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
@@ -647,30 +902,230 @@
     });
 
     // Touch control helpers
-    function bindHold(btn, down, up) {
-      const start = (e) => { e.preventDefault(); down(); };
-      const end = (e) => { e.preventDefault(); up(); if (btn) btn.classList.remove('active'); };
-      btn.addEventListener('touchstart', start, { passive: false });
-      btn.addEventListener('touchend', end, { passive: false });
-      btn.addEventListener('touchcancel', end, { passive: false });
-      btn.addEventListener('mousedown', start);
-      btn.addEventListener('mouseup', end);
-      btn.addEventListener('mouseleave', end);
-      btn.addEventListener('mousedown', ()=>btn.classList.add('active'));
-      btn.addEventListener('touchstart', ()=>btn.classList.add('active'));
+    const SUPPORTS_POINTER = typeof window.PointerEvent !== 'undefined';
+
+    function updateJoystickVisual(x, y) {
+      if (!joystickThumb) return;
+      joystickThumb.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
     }
-    bindHold(btnLeft, () => { keys.add('a'); keysDown.add('a'); }, () => { keys.delete('a'); keysDown.delete('a'); });
-    bindHold(btnRight, () => { keys.add('d'); keysDown.add('d'); }, () => { keys.delete('d'); keysDown.delete('d'); });
-    bindHold(btnGas, () => { keys.add('w'); keysDown.add('w'); }, () => { keys.delete('w'); keysDown.delete('w'); });
-    bindHold(btnBrake, () => { keys.add('s'); keysDown.add('s'); }, () => { keys.delete('s'); keysDown.delete('s'); });
+
+    function resetJoystick() {
+      touchSteerValue = 0;
+      touchSteerActive = false;
+      steerTouchId = null;
+      updateJoystickVisual(0, 0);
+    }
+
+    function updateSteerFromPoint(clientX, clientY) {
+      if (!joystickBase) return;
+      const rect = joystickBase.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const dx = clientX - centerX;
+      const dy = clientY - centerY;
+      const maxRadius = rect.width / 2;
+      const distance = Math.hypot(dx, dy) || 1;
+      const clampRadius = Math.min(distance, maxRadius);
+      const normX = clamp(dx / maxRadius, -1, 1);
+      touchSteerValue = clamp(normX, -1, 1);
+      const displayX = (dx / distance) * clampRadius;
+      const displayY = (dy / distance) * clampRadius;
+      updateJoystickVisual(displayX, displayY);
+    }
+
+    function handleSteerPointerDown(ev) {
+      if (!joystickBase) return;
+      joystickBase.setPointerCapture(ev.pointerId);
+      steerTouchId = ev.pointerId;
+      touchSteerActive = true;
+      updateSteerFromPoint(ev.clientX, ev.clientY);
+      ev.preventDefault();
+    }
+
+    function handleSteerPointerMove(ev) {
+      if (ev.pointerId !== steerTouchId) return;
+      updateSteerFromPoint(ev.clientX, ev.clientY);
+      ev.preventDefault();
+    }
+
+    function handleSteerPointerEnd(ev) {
+      if (ev.pointerId !== steerTouchId) return;
+      if (joystickBase) joystickBase.releasePointerCapture(ev.pointerId);
+      resetJoystick();
+      ev.preventDefault();
+    }
+
+    function attachJoystick() {
+      if (!joystickBase) return;
+      if (SUPPORTS_POINTER) {
+        joystickBase.addEventListener('pointerdown', handleSteerPointerDown, { passive: false });
+        joystickBase.addEventListener('pointermove', handleSteerPointerMove, { passive: false });
+        joystickBase.addEventListener('pointerup', handleSteerPointerEnd, { passive: false });
+        joystickBase.addEventListener('pointercancel', handleSteerPointerEnd, { passive: false });
+      } else {
+        joystickBase.addEventListener('touchstart', (ev) => {
+          if (steerTouchId != null) return;
+          const t = ev.changedTouches[0];
+          steerTouchId = t.identifier;
+          touchSteerActive = true;
+          updateSteerFromPoint(t.clientX, t.clientY);
+          ev.preventDefault();
+        }, { passive: false });
+        joystickBase.addEventListener('touchmove', (ev) => {
+          if (steerTouchId == null) return;
+          for (const t of ev.changedTouches) {
+            if (t.identifier === steerTouchId) {
+              updateSteerFromPoint(t.clientX, t.clientY);
+              ev.preventDefault();
+              return;
+            }
+          }
+        }, { passive: false });
+        const endHandler = (ev) => {
+          if (steerTouchId == null) return;
+          for (const t of ev.changedTouches) {
+            if (t.identifier === steerTouchId) {
+              resetJoystick();
+              ev.preventDefault();
+              return;
+            }
+          }
+        };
+        joystickBase.addEventListener('touchend', endHandler, { passive: false });
+        joystickBase.addEventListener('touchcancel', endHandler, { passive: false });
+      }
+      joystickBase.addEventListener('mouseleave', () => { if (!touchSteerActive) resetJoystick(); });
+      joystickBase.addEventListener('mouseup', () => { if (!touchSteerActive) resetJoystick(); });
+    }
+
+    function updatePedalVisual(pedal, fill, value) {
+      if (fill) fill.style.height = `${Math.round(value * 100)}%`;
+      if (!pedal) return;
+      pedal.style.transform = value > 0.01 ? 'scale(0.98)' : 'scale(1)';
+    }
+
+    function updateThrottleFromPoint(clientY) {
+      if (!pedalAccel) return;
+      const rect = pedalAccel.getBoundingClientRect();
+      const ratio = 1 - clamp((clientY - rect.top) / rect.height, 0, 1);
+      touchThrottleValue = clamp(ratio, 0, 1);
+      touchThrottleActive = touchThrottleValue > 0.02;
+      updatePedalVisual(pedalAccel, pedalAccelFill, touchThrottleValue);
+    }
+
+    function updateBrakeFromPoint(clientY) {
+      if (!pedalBrake) return;
+      const rect = pedalBrake.getBoundingClientRect();
+      const ratio = clamp((clientY - rect.top) / rect.height, 0, 1);
+      touchBrakeValue = clamp(1 - ratio, 0, 1);
+      touchBrakeActive = touchBrakeValue > 0.02;
+      updatePedalVisual(pedalBrake, pedalBrakeFill, touchBrakeValue);
+    }
+
+    function attachPedal(pedal, getId, setId, updateFn, resetFn) {
+      if (!pedal) return;
+      if (SUPPORTS_POINTER) {
+        pedal.addEventListener('pointerdown', (ev) => {
+          pedal.setPointerCapture(ev.pointerId);
+          setId(ev.pointerId);
+          updateFn(ev.clientY);
+          ev.preventDefault();
+        }, { passive: false });
+        pedal.addEventListener('pointermove', (ev) => {
+          if (ev.pointerId !== getId()) return;
+          updateFn(ev.clientY);
+          ev.preventDefault();
+        }, { passive: false });
+        pedal.addEventListener('pointerup', (ev) => {
+          if (ev.pointerId !== getId()) return;
+          pedal.releasePointerCapture(ev.pointerId);
+          resetFn();
+          ev.preventDefault();
+        }, { passive: false });
+        pedal.addEventListener('pointercancel', (ev) => {
+          if (ev.pointerId !== getId()) return;
+          pedal.releasePointerCapture(ev.pointerId);
+          resetFn();
+          ev.preventDefault();
+        }, { passive: false });
+      } else {
+        pedal.addEventListener('touchstart', (ev) => {
+          if (getId() != null) return;
+          const t = ev.changedTouches[0];
+          setId(t.identifier);
+          updateFn(t.clientY);
+          ev.preventDefault();
+        }, { passive: false });
+        pedal.addEventListener('touchmove', (ev) => {
+          if (getId() == null) return;
+          for (const t of ev.changedTouches) {
+            if (t.identifier === getId()) {
+              updateFn(t.clientY);
+              ev.preventDefault();
+              return;
+            }
+          }
+        }, { passive: false });
+        const endHandler = (ev) => {
+          if (getId() == null) return;
+          for (const t of ev.changedTouches) {
+            if (t.identifier === getId()) {
+              resetFn();
+              ev.preventDefault();
+              return;
+            }
+          }
+        };
+        pedal.addEventListener('touchend', endHandler, { passive: false });
+        pedal.addEventListener('touchcancel', endHandler, { passive: false });
+      }
+      pedal.addEventListener('mouseleave', () => resetFn());
+      pedal.addEventListener('mouseup', () => resetFn());
+    }
+
+    attachJoystick();
+    attachPedal(
+      pedalAccel,
+      () => throttleTouchId,
+      (id) => { throttleTouchId = id; },
+      updateThrottleFromPoint,
+      () => {
+        throttleTouchId = null;
+        touchThrottleValue = 0;
+        touchThrottleActive = false;
+        updatePedalVisual(pedalAccel, pedalAccelFill, 0);
+      },
+    );
+    attachPedal(
+      pedalBrake,
+      () => brakeTouchId,
+      (id) => { brakeTouchId = id; },
+      updateBrakeFromPoint,
+      () => {
+        brakeTouchId = null;
+        touchBrakeValue = 0;
+        touchBrakeActive = false;
+        updatePedalVisual(pedalBrake, pedalBrakeFill, 0);
+      },
+    );
 
     setInterval(() => {
       if (isSpectator) return;
-      input.throttle = (keys.has('w') || keys.has('arrowup')) ? 1 : 0;
-      input.brake = (keys.has('s') || keys.has('arrowdown')) ? 1 : 0;
-      const left = (keys.has('a') || keys.has('arrowleft')) ? 1 : 0;
-      const right = (keys.has('d') || keys.has('arrowright')) ? 1 : 0;
-      input.steer = clamp(right - left, -1, 1);
+      const digitalThrottle = (keys.has('w') || keys.has('arrowup')) ? 1 : 0;
+      const digitalBrake = (keys.has('s') || keys.has('arrowdown')) ? 1 : 0;
+      const digitalLeft = (keys.has('a') || keys.has('arrowleft')) ? 1 : 0;
+      const digitalRight = (keys.has('d') || keys.has('arrowright')) ? 1 : 0;
+
+      const steerAnalog = touchSteerActive ? touchSteerValue : 0;
+      const throttleAnalog = touchThrottleActive ? touchThrottleValue : 0;
+      const brakeAnalog = touchBrakeActive ? touchBrakeValue : 0;
+
+      input.throttle = Math.max(digitalThrottle, throttleAnalog);
+      input.brake = Math.max(digitalBrake, brakeAnalog);
+
+      const steerDigital = clamp(digitalRight - digitalLeft, -1, 1);
+      const steerCombined = touchSteerActive ? steerAnalog : steerDigital;
+      input.steer = clamp(steerCombined, -1, 1);
       socket.emit('input', input);
     }, 1000 / 30);
 
@@ -704,6 +1159,16 @@
   function draw() {
     // Clear
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = ensureBackgroundGradient();
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const vignette = ctx.createRadialGradient(canvas.width * 0.5, canvas.height * 0.5, Math.min(canvas.width, canvas.height) * 0.35, canvas.width * 0.5, canvas.height * 0.5, Math.max(canvas.width, canvas.height) * 0.72);
+    vignette.addColorStop(0, 'rgba(0,0,0,0)');
+    vignette.addColorStop(1, 'rgba(0,0,0,0.38)');
+    ctx.save();
+    ctx.fillStyle = vignette;
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
     // Early if no track
     if (!track) return;
 
@@ -911,6 +1376,17 @@
     try { if (socket) socket.disconnect(); } catch(e) {}
     socket = null; you = null; currentRoom = null; meLocal=null; meServer=null;
     hudEl.classList.add('hidden'); speedDialEl.classList.add('hidden'); mini.classList.add('hidden');
+    if (bestLapEl) bestLapEl.classList.add('hidden');
+    if (lapCounterEl) lapCounterEl.classList.add('hidden');
+    if (touchEl) {
+      touchEl.classList.add('hidden');
+      touchSteerValue = 0; touchSteerActive = false; steerTouchId = null;
+      touchThrottleValue = 0; touchThrottleActive = false; throttleTouchId = null;
+      touchBrakeValue = 0; touchBrakeActive = false; brakeTouchId = null;
+      if (joystickThumb) joystickThumb.style.transform = 'translate(-50%, -50%)';
+      if (pedalAccelFill) pedalAccelFill.style.height = '0%';
+      if (pedalBrakeFill) pedalBrakeFill.style.height = '0%';
+    }
     if (bestLapEl) bestLapEl.textContent = 'PB —';
     hideFinish();
     browserPanel.classList.remove('hidden');
@@ -943,100 +1419,261 @@
   renderGlobalLb();
 
   // Drawing helpers
-  function drawTrack(ctx, t) {
-    const n = 256;
-    const w2 = t.width / 2;
-    // Prepare asphalt pattern
-    if (!asphaltPattern) {
-      noiseCanvas = document.createElement('canvas');
-      noiseCanvas.width = noiseCanvas.height = 128;
-      const nctx = noiseCanvas.getContext('2d');
-      const img = nctx.createImageData(128,128);
-      for (let i=0;i<img.data.length;i+=4){
-        const v = 230 + Math.floor(Math.random()*10); // light noise
-        img.data[i]=img.data[i+1]=img.data[i+2]=v; img.data[i+3]=18; // low alpha
-      }
-      nctx.putImageData(img,0,0);
-      asphaltPattern = ctx.createPattern(noiseCanvas, 'repeat');
-    }
-    // Grass background large disc
-    ctx.save();
-    ctx.fillStyle = '#cde7b0';
-    const fieldR = t.baseRadius + t.width + 800;
-    ctx.beginPath(); ctx.arc(0,0, fieldR, 0, Math.PI*2); ctx.fill();
-    ctx.restore();
+  function drawSurfaceFeature(ctx, track, entry, opts = {}) {
+    if (!entry) return;
+    const { type, path, textureKey, centerLane, midTheta, centerX: cx, centerY: cy } = entry;
+    const styles = FEATURE_STYLES[type] || FEATURE_STYLES.default;
+    const texture = textureKey ? getTexture(textureKey) : null;
+    const alpha = opts.alpha != null ? opts.alpha : 1;
 
-    // Track fill (asphalt)
-    ctx.fillStyle = '#ededed';
-    ctx.beginPath();
-    for (let i = 0; i <= n; i++) {
-      const theta = (i / n) * Math.PI * 2;
-      const r = rAt(theta, t) + w2;
-      const x = Math.cos(theta) * r;
-      const y = Math.sin(theta) * r;
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    }
-    for (let i = n; i >= 0; i--) {
-      const theta = (i / n) * Math.PI * 2;
-      const r = rAt(theta, t) - w2;
-      const x = Math.cos(theta) * r;
-      const y = Math.sin(theta) * r;
-      ctx.lineTo(x, y);
-    }
-    ctx.closePath();
-    ctx.fill();
-    if (asphaltPattern) {
+    ctx.save();
+    ctx.globalAlpha *= alpha;
+    if (texture) {
       ctx.save();
-      ctx.clip();
-      ctx.globalAlpha = 1.0;
-      ctx.fillStyle = asphaltPattern;
-      ctx.fillRect(-fieldR, -fieldR, fieldR*2, fieldR*2);
+      ctx.clip(path);
+      ctx.fillStyle = texture;
+      const span = track.baseRadius + track.width + 1200;
+      ctx.fillRect(-span, -span, span * 2, span * 2);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = styles.fill;
+      ctx.fill(path);
+    }
+    ctx.lineWidth = opts.lineWidth || Math.max(3, track.width * 0.025);
+    ctx.strokeStyle = styles.stroke;
+    ctx.stroke(path);
+
+    if (type === 'boost') {
+      const tx = -Math.sin(midTheta);
+      const ty = Math.cos(midTheta);
+      const arrowLen = Math.max(track.width * 1.2, 120);
+      const head = arrowLen * 0.22;
+      ctx.strokeStyle = styles.stroke;
+      ctx.lineWidth = Math.max(4, track.width * 0.04);
+      ctx.beginPath();
+      ctx.moveTo(cx - tx * arrowLen * 0.5, cy - ty * arrowLen * 0.5);
+      ctx.lineTo(cx + tx * arrowLen * 0.5, cy + ty * arrowLen * 0.5);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx + tx * arrowLen * 0.5, cy + ty * arrowLen * 0.5);
+      ctx.lineTo(cx + tx * arrowLen * 0.5 - tx * head - ty * head * 0.5, cy + ty * arrowLen * 0.5 - ty * head + tx * head * 0.5);
+      ctx.lineTo(cx + tx * arrowLen * 0.5 - tx * head + ty * head * 0.5, cy + ty * arrowLen * 0.5 - ty * head - tx * head * 0.5);
+      ctx.closePath();
+      ctx.fillStyle = styles.stroke;
+      ctx.fill();
+    } else if (type === 'wind') {
+      const normalDir = entry.direction === -1 ? -1 : 1;
+      const nx = Math.cos(midTheta) * normalDir;
+      const ny = Math.sin(midTheta) * normalDir;
+      const arrowLen = Math.max(track.width * 0.9, 90);
+      const head = Math.max(track.width * 0.18, 36);
+      ctx.strokeStyle = styles.stroke;
+      ctx.lineWidth = Math.max(4, track.width * 0.035);
+      ctx.beginPath();
+      ctx.moveTo(cx - nx * arrowLen * 0.5, cy - ny * arrowLen * 0.5);
+      ctx.lineTo(cx + nx * arrowLen * 0.5, cy + ny * arrowLen * 0.5);
+      ctx.stroke();
+      ctx.beginPath();
+      const tx = -ny;
+      const ty = nx;
+      ctx.moveTo(cx + nx * arrowLen * 0.5, cy + ny * arrowLen * 0.5);
+      ctx.lineTo(cx + nx * arrowLen * 0.5 - nx * head + tx * head * 0.4, cy + ny * arrowLen * 0.5 - ny * head + ty * head * 0.4);
+      ctx.lineTo(cx + nx * arrowLen * 0.5 - nx * head - tx * head * 0.4, cy + ny * arrowLen * 0.5 - ny * head - ty * head * 0.4);
+      ctx.closePath();
+      ctx.fillStyle = styles.stroke;
+      ctx.fill();
+    } else if (texture) {
+      const gloss = ctx.createRadialGradient(cx, cy, 0, cx, cy, track.width * 0.35);
+      gloss.addColorStop(0, 'rgba(255,255,255,0.1)');
+      gloss.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      ctx.globalAlpha = 0.35 * alpha;
+      ctx.fillStyle = gloss;
+      ctx.beginPath();
+      ctx.arc(cx, cy, track.width * 0.45, 0, TAU);
+      ctx.fill();
       ctx.restore();
     }
 
-    // Edge outlines for clarity
+    ctx.restore();
+  }
+
+  function drawSurfaceFeatures(ctx, track, opts = {}) {
+    const cache = buildTrackCache(track);
+    const entries = cache.featureCache;
+    if (!entries || entries.length === 0) return;
+    for (const entry of entries) {
+      drawSurfaceFeature(ctx, track, entry, opts);
+    }
+  }
+
+  function buildTrackCache(track) {
+    const cache = track.__clientCache || {};
+    const key = `${track.seed || 'seed'}:${track.width}`;
+    if (cache.key === key) return cache;
+    const n = 180;
+    const w2 = track.width / 2;
+    const trackPath = new Path2D();
+    const outerPath = new Path2D();
+    const innerPath = new Path2D();
+    const centerPath = new Path2D();
+    for (let i = 0; i <= n; i++) {
+      const theta = (i / n) * TAU;
+      const r = rAt(theta, track) + w2;
+      const x = Math.cos(theta) * r;
+      const y = Math.sin(theta) * r;
+      if (i === 0) {
+        trackPath.moveTo(x, y);
+        outerPath.moveTo(x, y);
+        centerPath.moveTo(Math.cos(theta) * rAt(theta, track), Math.sin(theta) * rAt(theta, track));
+      } else {
+        trackPath.lineTo(x, y);
+        outerPath.lineTo(x, y);
+        centerPath.lineTo(Math.cos(theta) * rAt(theta, track), Math.sin(theta) * rAt(theta, track));
+      }
+    }
+    for (let i = n; i >= 0; i--) {
+      const theta = (i / n) * TAU;
+      const r = rAt(theta, track) - w2;
+      const x = Math.cos(theta) * r;
+      const y = Math.sin(theta) * r;
+      trackPath.lineTo(x, y);
+      if (i === n) innerPath.moveTo(x, y); else innerPath.lineTo(x, y);
+    }
+    trackPath.closePath();
+    innerPath.closePath();
+    const fieldRadius = track.baseRadius + track.width + 800;
+    const auraRadius = track.baseRadius + track.width;
+    centerPath.closePath();
+    const features = Array.isArray(track.features) ? track.features : [];
+    const featureCache = [];
+    for (const feature of features) {
+      if (!Number.isFinite(feature.length) || feature.length <= 0) continue;
+      const laneMinRaw = typeof feature.laneMin === 'number' ? feature.laneMin : (feature.laneMin ?? -1);
+      const laneMaxRaw = typeof feature.laneMax === 'number' ? feature.laneMax : (feature.laneMax ?? 1);
+      let laneMin = clamp(Math.min(laneMinRaw, laneMaxRaw), -1, 1);
+      let laneMax = clamp(Math.max(laneMinRaw, laneMaxRaw), -1, 1);
+      if (laneMax - laneMin < 0.02) {
+        const mid = (laneMin + laneMax) / 2;
+        laneMin = clamp(mid - 0.01, -1, 1);
+        laneMax = clamp(mid + 0.01, -1, 1);
+      }
+      const path = new Path2D();
+      const steps = Math.max(10, Math.round((feature.length / TAU) * 64));
+      for (let i = 0; i <= steps; i++) {
+        const tStep = i / steps;
+        const theta = feature.start + feature.length * tStep;
+        const ang = ((theta % TAU) + TAU) % TAU;
+        const rc = rAt(ang, track);
+        const r = rc + laneMax * w2;
+        const x = Math.cos(ang) * r;
+        const y = Math.sin(ang) * r;
+        if (i === 0) path.moveTo(x, y); else path.lineTo(x, y);
+      }
+      for (let i = steps; i >= 0; i--) {
+        const tStep = i / steps;
+        const theta = feature.start + feature.length * tStep;
+        const ang = ((theta % TAU) + TAU) % TAU;
+        const rc = rAt(ang, track);
+        const r = rc + laneMin * w2;
+        const x = Math.cos(ang) * r;
+        const y = Math.sin(ang) * r;
+        path.lineTo(x, y);
+      }
+      path.closePath();
+
+      const centerLane = clamp((laneMin + laneMax) / 2, -1, 1);
+      const midTheta = ((feature.start + feature.length / 2) % TAU + TAU) % TAU;
+      const rcMid = rAt(midTheta, track);
+      const rMid = rcMid + centerLane * w2;
+      const centerX = Math.cos(midTheta) * rMid;
+      const centerY = Math.sin(midTheta) * rMid;
+      featureCache.push({
+        type: feature.type,
+        path,
+        laneMin,
+        laneMax,
+        centerLane,
+        midTheta,
+        centerX,
+        centerY,
+        direction: feature.direction,
+        textureKey: FEATURE_TEXTURE_KEYS[feature.type],
+      });
+    }
+
+    const newCache = { key, trackPath, outerPath, innerPath, centerPath, w2, fieldRadius, auraRadius, featureCache };
+    track.__clientCache = newCache;
+    return newCache;
+  }
+
+  function drawTrack(ctx, t) {
+    const cache = buildTrackCache(t);
+    const { trackPath, outerPath, innerPath, centerPath, w2, fieldRadius, auraRadius } = cache;
+    if (!asphaltPattern) asphaltPattern = getTexture('asphalt');
+    const grassPattern = getTexture('grass');
+
+    ctx.save();
+    if (grassPattern) {
+      ctx.fillStyle = grassPattern;
+      ctx.fillRect(-fieldRadius, -fieldRadius, fieldRadius * 2, fieldRadius * 2);
+    } else {
+      ctx.fillStyle = '#3e6a1c';
+      ctx.fillRect(-fieldRadius, -fieldRadius, fieldRadius * 2, fieldRadius * 2);
+    }
+    ctx.restore();
+
+    ctx.save();
+    const aura = ctx.createRadialGradient(0, 0, t.baseRadius * 0.3, 0, 0, auraRadius);
+    aura.addColorStop(0, BG_COLORS.glow);
+    aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.75;
+    ctx.fillStyle = aura;
+    ctx.beginPath(); ctx.arc(0, 0, auraRadius, 0, TAU); ctx.fill();
+    ctx.restore();
+
+    ctx.fillStyle = '#e5e7ec';
+    ctx.fill(trackPath);
+
+    ctx.save();
+    ctx.clip(trackPath);
+    if (asphaltPattern) {
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = asphaltPattern;
+      ctx.fillRect(-fieldRadius, -fieldRadius, fieldRadius * 2, fieldRadius * 2);
+    }
+    const sheen = ctx.createRadialGradient(0, 0, t.baseRadius * 0.2, 0, 0, t.baseRadius + t.width);
+    sheen.addColorStop(0, 'rgba(255,255,255,0.18)');
+    sheen.addColorStop(0.6, 'rgba(255,255,255,0.04)');
+    sheen.addColorStop(1, 'rgba(10,15,25,0.28)');
+    ctx.globalCompositeOperation = 'overlay';
+    ctx.fillStyle = sheen;
+    ctx.fillRect(-fieldRadius, -fieldRadius, fieldRadius * 2, fieldRadius * 2);
+    ctx.restore();
+
+    drawSurfaceFeatures(ctx, t);
+
     ctx.strokeStyle = '#cfcfcf';
     ctx.lineWidth = 2.5;
     ctx.setLineDash([]);
-    ctx.beginPath();
-    for (let i = 0; i <= n; i++) {
-      const theta = (i / n) * Math.PI * 2;
-      const r = rAt(theta, t) + w2;
-      const x = Math.cos(theta) * r;
-      const y = Math.sin(theta) * r;
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    }
-    ctx.stroke();
+    ctx.stroke(outerPath);
     ctx.strokeStyle = '#e0e0e0';
-    ctx.beginPath();
-    for (let i = 0; i <= n; i++) {
-      const theta = (i / n) * Math.PI * 2;
-      const r = rAt(theta, t) - w2;
-      const x = Math.cos(theta) * r;
-      const y = Math.sin(theta) * r;
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    }
-    ctx.stroke();
+    ctx.stroke(innerPath);
 
     // Centerline with direction chevrons
     ctx.strokeStyle = '#ddd';
     ctx.lineWidth = 4;
     ctx.setLineDash([18, 16]);
-    ctx.beginPath();
-    for (let i = 0; i <= n; i++) {
-      const theta = (i / n) * Math.PI * 2;
-      const r = rAt(theta, t);
-      const x = Math.cos(theta) * r;
-      const y = Math.sin(theta) * r;
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    }
-    ctx.stroke();
+    ctx.stroke(centerPath);
     ctx.setLineDash([]);
 
     // Curbs (red/white) along inner/outer edges at intervals
     const CURB_STEP = 28;
+    const n = 180;
     for (let i = 0; i < n; i++) {
-      const theta = (i / n) * Math.PI * 2;
+      const theta = (i / n) * TAU;
       const rIn = rAt(theta, t) - w2;
       const rOut = rAt(theta, t) + w2;
       if (i % 6 === 0) {
@@ -1105,6 +1742,12 @@
     const h = mini.clientHeight || 200;
     mctx.clearRect(0, 0, w, h);
     if (!track) return;
+    const bg = mctx.createLinearGradient(0, 0, 0, h);
+    bg.addColorStop(0, 'rgba(14, 21, 38, 0.95)');
+    bg.addColorStop(1, 'rgba(10, 14, 24, 0.95)');
+    mctx.fillStyle = bg;
+    mctx.fillRect(0, 0, w, h);
+
     // world fit
     const margin = 100;
     const tMax = trackMaxRadius(track) + margin;
@@ -1118,48 +1761,33 @@
     mctx.scale(scale, scale);
 
     // Track filled ring for high contrast
-    const n = 220;
-    const w2 = track.width / 2;
-    mctx.beginPath();
-    for (let i = 0; i <= n; i++) {
-      const theta = (i / n) * Math.PI * 2;
-      const r = rAt(theta, track) + w2;
-      const x = Math.cos(theta) * r;
-      const y = Math.sin(theta) * r;
-      if (i === 0) mctx.moveTo(x, y); else mctx.lineTo(x, y);
+    const cache = buildTrackCache(track);
+    const { trackPath, outerPath, innerPath, w2, fieldRadius } = cache;
+    if (!asphaltPattern) asphaltPattern = getTexture('asphalt');
+    const grassPattern = getTexture('grass');
+
+    if (grassPattern) {
+      mctx.fillStyle = grassPattern;
+      mctx.fillRect(-fieldRadius, -fieldRadius, fieldRadius * 2, fieldRadius * 2);
     }
-    for (let i = n; i >= 0; i--) {
-      const theta = (i / n) * Math.PI * 2;
-      const r = rAt(theta, track) - w2;
-      const x = Math.cos(theta) * r;
-      const y = Math.sin(theta) * r;
-      mctx.lineTo(x, y);
+    mctx.fillStyle = '#e3e9f5';
+    mctx.fill(trackPath);
+    if (asphaltPattern) {
+      mctx.save();
+      mctx.clip(trackPath);
+      mctx.fillStyle = asphaltPattern;
+      mctx.fillRect(-fieldRadius, -fieldRadius, fieldRadius * 2, fieldRadius * 2);
+      mctx.restore();
     }
-    mctx.closePath();
-    mctx.fillStyle = '#e8edf7';
-    mctx.fill();
+
+    drawSurfaceFeatures(mctx, track, { alpha: 0.6, lineWidth: Math.max(1.6, track.width * 0.02) });
+
     // Bold edges
     mctx.strokeStyle = '#7a8aa6';
     mctx.lineWidth = 3;
-    mctx.beginPath();
-    for (let i = 0; i <= n; i++) {
-      const theta = (i / n) * Math.PI * 2;
-      const r = rAt(theta, track) + w2;
-      const x = Math.cos(theta) * r;
-      const y = Math.sin(theta) * r;
-      if (i === 0) mctx.moveTo(x, y); else mctx.lineTo(x, y);
-    }
-    mctx.stroke();
+    mctx.stroke(outerPath);
     mctx.strokeStyle = '#a8b4c9';
-    mctx.beginPath();
-    for (let i = 0; i <= n; i++) {
-      const theta = (i / n) * Math.PI * 2;
-      const r = rAt(theta, track) - w2;
-      const x = Math.cos(theta) * r;
-      const y = Math.sin(theta) * r;
-      if (i === 0) mctx.moveTo(x, y); else mctx.lineTo(x, y);
-    }
-    mctx.stroke();
+    mctx.stroke(innerPath);
 
     // Start/finish marker (horizontal across track, pixel-consistent thickness)
     const st = (track.startTheta != null ? track.startTheta : 0);
@@ -1218,9 +1846,9 @@
   // (Voting removed)
 
   const NAME_LABEL_FONT = '600 14px "Inter", sans-serif';
-  const NAME_LABEL_BG = 'rgba(0,0,0,0.55)';
-  const NAME_LABEL_COLOR = '#f5f5f5';
-  const NAME_LABEL_HIGHLIGHT = '#ffe082';
+  const NAME_LABEL_BG = 'rgba(10,16,28,0.78)';
+  const NAME_LABEL_COLOR = '#f1f5ff';
+  const NAME_LABEL_HIGHLIGHT = '#ffe27a';
 
   function nameLabelOffset(shape) {
     switch (normalizeShape(shape)) {
@@ -1252,8 +1880,19 @@
     const rectWidth = textWidth + padX * 2;
     const rectHeight = 18 + padY;
 
-    ctx.fillStyle = NAME_LABEL_BG;
+    const grad = ctx.createLinearGradient(0, -rectHeight, 0, 0);
+    if (highlight) {
+      grad.addColorStop(0, 'rgba(255, 215, 90, 0.85)');
+      grad.addColorStop(1, 'rgba(120, 82, 0, 0.85)');
+    } else {
+      grad.addColorStop(0, 'rgba(21, 30, 48, 0.86)');
+      grad.addColorStop(1, 'rgba(9, 13, 22, 0.9)');
+    }
+    ctx.fillStyle = grad;
     ctx.fillRect(-rectWidth / 2, -rectHeight, rectWidth, rectHeight);
+    ctx.strokeStyle = highlight ? 'rgba(255, 230, 140, 0.8)' : 'rgba(160, 181, 222, 0.35)';
+    ctx.lineWidth = highlight ? 1.6 : 1.1;
+    ctx.strokeRect(-rectWidth / 2, -rectHeight, rectWidth, rectHeight);
 
     ctx.fillStyle = labelColor;
     ctx.fillText(text, 0, -rectHeight / 2);
@@ -1356,6 +1995,18 @@
     ctx.lineWidth = 1.2;
     ctx.stroke();
 
+    ctx.save();
+    ctx.globalAlpha = 0.65;
+    const paintSheen = ctx.createLinearGradient(-L * 0.35, -W, L * 0.55, W);
+    paintSheen.addColorStop(0, 'rgba(255,255,255,0.25)');
+    paintSheen.addColorStop(0.35, 'rgba(255,255,255,0.08)');
+    paintSheen.addColorStop(1, 'rgba(0,0,0,0.25)');
+    ctx.fillStyle = paintSheen;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, L * 0.42, W * 0.64, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
     // Accent / nose highlight
     ctx.fillStyle = accent;
     ctx.beginPath();
@@ -1399,6 +2050,39 @@
     }
     ctx.closePath();
     ctx.fill();
+
+    // Canopy / window tint
+    ctx.save();
+    ctx.globalAlpha = 0.32;
+    const canopy = ctx.createLinearGradient(-L * 0.1, -W * 0.5, L * 0.35, W * 0.5);
+    canopy.addColorStop(0, 'rgba(80,120,172,0.65)');
+    canopy.addColorStop(1, 'rgba(12,22,36,0.85)');
+    ctx.fillStyle = canopy;
+    ctx.beginPath();
+    ctx.ellipse(L * 0.1, 0, L * 0.28, W * 0.42, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Brake lights / exhaust
+    if (brake) {
+      ctx.fillStyle = 'rgba(255, 72, 64, 0.88)';
+      ctx.fillRect(-L * 0.52, -W * 0.33, L * 0.08, W * 0.18);
+      ctx.fillRect(-L * 0.52, W * 0.15, L * 0.08, W * 0.18);
+    }
+    if (throttle) {
+      ctx.save();
+      ctx.translate(-L * 0.55, 0);
+      const flame = ctx.createLinearGradient(-L * 0.25, 0, L * 0.35, 0);
+      flame.addColorStop(0, 'rgba(255, 196, 0, 0)');
+      flame.addColorStop(0.3, 'rgba(255, 196, 0, 0.45)');
+      flame.addColorStop(0.7, 'rgba(255, 64, 0, 0.55)');
+      flame.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.fillStyle = flame;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, L * 0.6, W * 0.35, 0, -Math.PI * 0.45, Math.PI * 0.45);
+      ctx.fill();
+      ctx.restore();
+    }
 
     // Windows and details
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
@@ -1588,11 +2272,15 @@
   function simulateLocal(dt) {
     // Read live keys for immediate feel
     // We'll reuse the same key state from the interval sender by tracking last values
-    const throttling = (keysDown.has('w') || keysDown.has('arrowup'));
-    const braking = (keysDown.has('s') || keysDown.has('arrowdown'));
-    const left = (keysDown.has('a') || keysDown.has('arrowleft')) ? 1 : 0;
-    const right = (keysDown.has('d') || keysDown.has('arrowright')) ? 1 : 0;
-    const steerInput = clamp(right - left, -1, 1);
+    const digitalThrottle = (keysDown.has('w') || keysDown.has('arrowup')) ? 1 : 0;
+    const digitalBrake = (keysDown.has('s') || keysDown.has('arrowdown')) ? 1 : 0;
+    const digitalLeft = (keysDown.has('a') || keysDown.has('arrowleft')) ? 1 : 0;
+    const digitalRight = (keysDown.has('d') || keysDown.has('arrowright')) ? 1 : 0;
+    const steerInput = touchSteerActive ? touchSteerValue : clamp(digitalRight - digitalLeft, -1, 1);
+    const throttleInput = Math.max(digitalThrottle, touchThrottleActive ? touchThrottleValue : 0);
+    const brakeInput = Math.max(digitalBrake, touchBrakeActive ? touchBrakeValue : 0);
+    const throttling = throttleInput > 0.02;
+    const braking = brakeInput > 0.02;
 
     // Steering smoothing and speed-aware turn rate
     const fx = Math.cos(meLocal.angle), fy = Math.sin(meLocal.angle);
@@ -1608,12 +2296,14 @@
     // Accel / brake
     let ax = 0, ay = 0;
     // Throttle smoothing for local feel
-    meLocal.throttle = meLocal.throttle == null ? (throttling?1:0) : meLocal.throttle + (((throttling?1:0) - meLocal.throttle) * Math.min(1, 6*dt));
+    meLocal.throttle = meLocal.throttle == null ? throttleInput : meLocal.throttle + ((throttleInput - meLocal.throttle) * Math.min(1, 6 * dt));
     if (meLocal.throttle) { ax += fx * PHY.ACCEL * meLocal.throttle; ay += fy * PHY.ACCEL * meLocal.throttle; }
     if (braking) {
       const vdotf = meLocal.vx * fx + meLocal.vy * fy;
-      if (vdotf > 40) { ax += -fx * PHY.BRAKE; ay += -fy * PHY.BRAKE; }
-      else { ax += -fx * PHY.REV_ACCEL; ay += -fy * PHY.REV_ACCEL; }
+      const brakeForce = PHY.BRAKE * clamp(brakeInput, 0, 1);
+      const revForce = PHY.REV_ACCEL * clamp(brakeInput, 0, 1);
+      if (vdotf > 40) { ax += -fx * brakeForce; ay += -fy * brakeForce; }
+      else { ax += -fx * revForce; ay += -fy * revForce; }
     }
     meLocal.vx += ax * dt; meLocal.vy += ay * dt;
 

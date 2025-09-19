@@ -11,10 +11,13 @@ const MIN_PLAYERS_TO_START = 15;
 const SNAPSHOT_RATE = 30; // Hz
 const AUTO_START_WAIT_MS = 2 * 60 * 1000; // 2 minutes
 const EMPTY_ROOM_GRACE_MS = 5 * 60 * 1000; // allow empty rooms to persist briefly
+const AUTO_FILL_WAIT_MS = 30 * 1000; // 30 seconds
 const SHAPE_LIST = ['capsule', 'wedge', 'formula', 'roadster', 'buggy', 'dragster', 'hover'];
 const ALLOWED_SHAPES = new Set(SHAPE_LIST);
 const DEFAULT_SHAPE = SHAPE_LIST[0];
 const PLAYER_NAME_MAX = 10;
+
+const AUTO_FILL_BOT_STYLES = ['rookie', 'pro', 'legend'];
 
 const sanitizeShape = (shape) => {
   const s = typeof shape === 'string' ? shape.toLowerCase() : '';
@@ -38,64 +41,64 @@ function createBotProfile(style = 'pro') {
     case 'extreme':
       return {
         style: 'legend',
-        aLat: randRange(500, 700),
-        maxSpeed: randRange(BOT_MAX_SPEED - 8, BOT_MAX_SPEED),
-        steerGain: randRange(1.9, 2.4),
-        look: randRange(0.24, 0.32),
-        brakeAgg: randRange(0.15, 0.28),
-        laneBias: randRange(-0.1, 0.1),
-        apexBias: randRange(0.85, 1.02),
-        jitterAmp: randRange(0.0, 0.02),
-        jitterFreq: randRange(0.38, 0.7),
-        reaction: randRange(0.022, 0.038),
-        bravery: randRange(1.55, 1.85),
-        throttleFloor: randRange(0.78, 0.9),
-        throttleAgg: randRange(1.6, 1.9),
-        slipBrakeThreshold: randRange(0.95, 0.98),
-        panicSlipThreshold: randRange(0.985, 0.998),
-        kdGain: randRange(0.12, 0.22),
+        aLat: randRange(620, 820),
+        maxSpeed: randRange(BOT_MAX_SPEED - 4, BOT_MAX_SPEED + 6),
+        steerGain: randRange(2.05, 2.45),
+        look: randRange(0.28, 0.38),
+        brakeAgg: randRange(0.1, 0.22),
+        laneBias: randRange(-0.08, 0.08),
+        apexBias: randRange(0.92, 1.1),
+        jitterAmp: randRange(0.0, 0.016),
+        jitterFreq: randRange(0.32, 0.6),
+        reaction: randRange(0.018, 0.032),
+        bravery: randRange(1.7, 2.05),
+        throttleFloor: randRange(0.82, 0.94),
+        throttleAgg: randRange(1.8, 2.1),
+        slipBrakeThreshold: randRange(0.97, 0.99),
+        panicSlipThreshold: randRange(0.988, 0.999),
+        kdGain: randRange(0.16, 0.26),
       };
     case 'rookie':
     case 'easy':
     case 'novice':
       return {
         style: 'rookie',
-        aLat: randRange(220, 320),
-        maxSpeed: randRange(SOFT_SPEED_CAP + 10, SOFT_SPEED_CAP + 45),
-        steerGain: randRange(1.25, 1.45),
-        look: randRange(0.16, 0.22),
-        brakeAgg: randRange(0.72, 0.9),
-        laneBias: randRange(-0.35, 0.35),
-        apexBias: randRange(0.35, 0.72),
-        jitterAmp: randRange(0.06, 0.12),
-        jitterFreq: randRange(0.45, 1.0),
-        reaction: randRange(0.09, 0.14),
-        bravery: randRange(1.05, 1.2),
-        throttleFloor: randRange(0.15, 0.28),
-        throttleAgg: randRange(1.05, 1.25),
-        slipBrakeThreshold: randRange(0.7, 0.78),
-        panicSlipThreshold: randRange(0.85, 0.92),
-        kdGain: randRange(0.06, 0.11),
+        aLat: randRange(260, 360),
+        maxSpeed: randRange(SOFT_SPEED_CAP + 40, SOFT_SPEED_CAP + 80),
+        steerGain: randRange(1.35, 1.6),
+        look: randRange(0.2, 0.28),
+        brakeAgg: randRange(0.5, 0.72),
+        laneBias: randRange(-0.28, 0.28),
+        apexBias: randRange(0.5, 0.82),
+        jitterAmp: randRange(0.04, 0.08),
+        jitterFreq: randRange(0.4, 0.9),
+        reaction: randRange(0.065, 0.11),
+        bravery: randRange(1.12, 1.32),
+        throttleFloor: randRange(0.26, 0.42),
+        throttleAgg: randRange(1.18, 1.4),
+        slipBrakeThreshold: randRange(0.76, 0.84),
+        panicSlipThreshold: randRange(0.88, 0.94),
+        kdGain: randRange(0.08, 0.14),
       };
     default:
       return {
         style: 'pro',
-        aLat: randRange(400, 580),
-        maxSpeed: randRange(SOFT_SPEED_CAP + 90, BOT_MAX_SPEED - 4),
-        steerGain: randRange(1.65, 2.05),
-        look: randRange(0.22, 0.3),
-        brakeAgg: randRange(0.25, 0.45),
-        laneBias: randRange(-0.2, 0.2),
-        apexBias: randRange(0.7, 0.92),
-        jitterAmp: randRange(0.02, 0.06),
-        jitterFreq: randRange(0.36, 0.85),
-        reaction: randRange(0.035, 0.06),
-        bravery: randRange(1.4, 1.65),
-        throttleFloor: randRange(0.55, 0.7),
-        throttleAgg: randRange(1.4, 1.7),
-        slipBrakeThreshold: randRange(0.88, 0.94),
-        panicSlipThreshold: randRange(0.95, 0.985),
-        kdGain: randRange(0.12, 0.18),
+        aLat: randRange(520, 700),
+        maxSpeed: randRange(SOFT_SPEED_CAP + 110, BOT_MAX_SPEED + 2),
+        steerGain: randRange(1.85, 2.2),
+        look: randRange(0.24, 0.34),
+        brakeAgg: randRange(0.2, 0.32),
+        laneBias: randRange(-0.16, 0.16),
+        apexBias: randRange(0.78, 1.0),
+        jitterAmp: randRange(0.015, 0.05),
+        jitterFreq: randRange(0.32, 0.78),
+        reaction: randRange(0.028, 0.05),
+        bravery: randRange(1.55, 1.9),
+        throttleFloor: randRange(0.68, 0.82),
+        throttleAgg: randRange(1.55, 1.85),
+        slipBrakeThreshold: randRange(0.9, 0.96),
+        panicSlipThreshold: randRange(0.965, 0.992),
+        kdGain: randRange(0.14, 0.22),
       };
   }
 }
@@ -200,6 +203,8 @@ class Rooms {
     const room = new Room({ id, name: name || `Campaign ${id}`, maxPlayers: 1 }, this.stats);
     room.isCampaign = true;
     room.hidden = true;
+    room.autoFillBotsAdded = true;
+    room.nextAutoFillAt = null;
     room.setupCampaign(event);
     this.rooms.set(id, room);
     return room;
@@ -210,6 +215,8 @@ class Rooms {
     const room = new Room({ id, name: name || `Custom ${id}`, maxPlayers: Math.min(MAX_PLAYERS_DEFAULT, maxPlayers || MAX_PLAYERS_DEFAULT) }, this.stats);
     room.isCustom = true;
     room.password = password ? String(password) : null;
+    room.autoFillBotsAdded = true;
+    room.nextAutoFillAt = null;
     room.raceDurationMs = Math.max(60_000, Number(durationMs) || RACE_DURATION_MS);
     room.minPlayersToStart = Math.max(1, Number(minPlayersToStart) || 2);
     if (aiCount && aiCount > 0) {
@@ -284,6 +291,9 @@ class Room {
     this.password = null;
     this.raceDurationMs = RACE_DURATION_MS;
     this.minPlayersToStart = MIN_PLAYERS_TO_START;
+    this.autoFillBotsAdded = false;
+    this.autoFillBotStyleIndex = 0;
+    this.nextAutoFillAt = this.waitingSince + AUTO_FILL_WAIT_MS;
   }
 
   publicInfo() {
@@ -361,13 +371,25 @@ class Room {
       skill: 'human',
     });
     this.humanCount += 1;
+    if (!this.isCampaign && !this.isCustom && this.humanCount === 1 && this.players.size < this.minPlayersToStart) {
+      this.nextAutoFillAt = Date.now() + AUTO_FILL_WAIT_MS;
+      this.autoFillBotsAdded = false;
+    }
     this.emptySince = null;
     if (this.stats) this.stats.ensure(safeName);
     // If enough players joined and we're waiting, start countdown
     const humanCount = this.humanCount;
-    if (!this.isCampaign && this.state === 'waiting' && humanCount >= this.minPlayersToStart) {
-      this.state = 'countdown';
-      this.countdownEndAt = Date.now() + COUNTDOWN_MS;
+    if (!this.isCampaign && this.state === 'waiting') {
+      const totalDrivers = this.players.size;
+      const minDrivers = Math.min(this.minPlayersToStart, this.maxPlayers);
+      const hasEnoughHumans = humanCount >= this.minPlayersToStart;
+      const hasRosterWithBots = humanCount > 0 && totalDrivers >= minDrivers;
+      if (hasEnoughHumans || hasRosterWithBots) {
+        this.state = 'countdown';
+        this.countdownEndAt = Date.now() + COUNTDOWN_MS;
+        this.nextAutoFillAt = null;
+        this.autoFillBotsAdded = true;
+      }
     }
     if (this.isCampaign && this.state === 'waiting') {
       this.state = 'countdown';
@@ -535,6 +557,152 @@ class Room {
     this.maxPlayers = Math.max(this.maxPlayers, this.players.size + 1);
   }
 
+  // Inject a mixed difficulty roster of AI drivers when a room lacks humans.
+  addAutoFillBots(count) {
+    const n = Math.max(0, count | 0);
+    if (n <= 0) return [];
+    const theta = (this.track && typeof this.track.startTheta === 'number') ? this.track.startTheta : 0;
+    const rc = rAt(theta, this.track);
+    const w2 = this.track.width / 2;
+    const margin = Math.max(CAR_RADIUS + 4, w2 * 0.12);
+    const span = (w2 - margin) - (-w2 + margin);
+    const step = n > 1 ? span / (n - 1) : 0;
+    const baseIndex = this.players.size;
+    const added = [];
+    for (let i = 0; i < n; i += 1) {
+      const styleIndex = (this.autoFillBotStyleIndex + i) % AUTO_FILL_BOT_STYLES.length;
+      const style = AUTO_FILL_BOT_STYLES[styleIndex];
+      const profile = createBotProfile(style);
+      const id = `bot-${nanoid()}`;
+      const off = -w2 + margin + step * i;
+      const r = rc + off;
+      const x = Math.cos(theta) * r;
+      const y = Math.sin(theta) * r;
+      const color = `hsl(${((baseIndex + i) * 47) % 360} 75% 50%)`;
+      const shape = SHAPE_LIST[(baseIndex + i) % SHAPE_LIST.length];
+      const botName = nextBotName();
+      this.players.set(id, {
+        id,
+        name: botName,
+        color,
+        x,
+        y,
+        angle: theta + Math.PI / 2,
+        vx: 0,
+        vy: 0,
+        throttle: 0,
+        targetThrottle: 0,
+        throttleState: 0,
+        brake: 0,
+        steer: 0,
+        steerState: 0,
+        lastTheta: theta,
+        laps: 0,
+        lapStartAt: 0,
+        lastLapMs: 0,
+        bestLapMs: null,
+        resets: 0,
+        progress: 0,
+        connected: false,
+        isBot: true,
+        profile,
+        shape,
+        skill: profile.style,
+      });
+      added.push(id);
+    }
+    this.autoFillBotStyleIndex = (this.autoFillBotStyleIndex + n) % AUTO_FILL_BOT_STYLES.length;
+    return added;
+  }
+
+  surfaceModifiers(theta, laneFrac) {
+    const track = this.track;
+    const features = track && Array.isArray(track.features) ? track.features : null;
+    if (!features || features.length === 0) return null;
+    const TAU = Math.PI * 2;
+    const mods = {
+      throttleMul: 1,
+      throttleAdd: 0,
+      dragMul: 1,
+      brakeMul: 1,
+      gripMul: 1,
+      steerMul: 1,
+      speedCapMul: 1,
+      speedCapAdd: 0,
+      forwardAccel: 0,
+      slipThresholdMul: 1,
+      slipThresholdAdd: 0,
+      lateralAccel: 0,
+    };
+    let hit = 0;
+    for (const f of features) {
+      if (!f) continue;
+      const diff = ((theta - f.start) % TAU + TAU) % TAU;
+      if (diff > (f.length || 0)) continue;
+      const laneMin = typeof f.laneMin === 'number' ? f.laneMin - 0.02 : -1.02;
+      const laneMax = typeof f.laneMax === 'number' ? f.laneMax + 0.02 : 1.02;
+      if (laneFrac < laneMin || laneFrac > laneMax) continue;
+      hit += 1;
+      const strength = typeof f.strength === 'number' ? f.strength : 1;
+      switch (f.type) {
+        case 'boost':
+          mods.throttleMul *= 1 + 0.35 * strength;
+          mods.dragMul *= Math.max(0.25, 1 - 0.28 * strength);
+          mods.speedCapAdd += 45 * strength;
+          mods.forwardAccel += 1500 * strength;
+          mods.gripMul *= 1.05;
+          break;
+        case 'puddle':
+          mods.throttleMul *= 0.4;
+          mods.dragMul *= 1.6 + 0.5 * strength;
+          mods.brakeMul *= 0.75;
+          mods.gripMul *= 0.85;
+          mods.slipThresholdMul *= 0.85;
+          break;
+        case 'dirt':
+          mods.throttleMul *= 0.85;
+          mods.dragMul *= 1.1;
+          mods.gripMul *= 0.6;
+          mods.steerMul *= 0.8;
+          mods.slipThresholdMul *= 0.75;
+          break;
+        case 'ice':
+          mods.throttleMul *= 0.55;
+          mods.dragMul *= Math.max(0.6, 0.9 + (0.08 * (1 - strength)));
+          mods.gripMul *= 0.35;
+          mods.steerMul *= 0.4;
+          mods.brakeMul *= 0.5;
+          mods.slipThresholdMul *= 0.6;
+          mods.speedCapMul *= 0.9;
+          break;
+        case 'tar':
+          mods.throttleMul *= 0.55;
+          mods.dragMul *= 2.1;
+          mods.brakeMul *= 1.35;
+          mods.gripMul *= 1.2;
+          mods.speedCapMul *= 0.65;
+          mods.speedCapAdd -= 40 * strength;
+          break;
+        case 'wind':
+          mods.lateralAccel += (f.direction === -1 ? -1 : 1) * (360 * strength);
+          mods.steerMul *= 0.95;
+          mods.dragMul *= 1.0;
+          break;
+        default:
+          break;
+      }
+    }
+    if (!hit) return null;
+    mods.dragMul = clamp(mods.dragMul, 0.2, 4);
+    mods.throttleMul = clamp(mods.throttleMul, 0, 3);
+    mods.gripMul = clamp(mods.gripMul, 0.05, 2.5);
+    mods.steerMul = clamp(mods.steerMul, 0.1, 2.5);
+    mods.brakeMul = clamp(mods.brakeMul, 0.1, 2.5);
+    mods.speedCapMul = clamp(mods.speedCapMul, 0.2, 2.5);
+    mods.slipThresholdMul = clamp(mods.slipThresholdMul, 0.2, 2.5);
+    return mods;
+  }
+
   updateBot(p, dt) {
     // Parameters
     const prof = p.profile || {};
@@ -545,7 +713,7 @@ class Room {
     // Speed-adaptive lookahead
     const speed = Math.hypot(p.vx, p.vy);
     const lookBase = prof.look || 0.12;
-    const look = clamp(lookBase + 0.0011 * speed, 0.09, 0.45);
+    const look = clamp(lookBase + 0.00135 * speed, 0.12, 0.55);
 
     // Track geometry ahead
     const pol = worldToTrackPolar(p.x, p.y);
@@ -565,7 +733,7 @@ class Room {
     const apexBias = prof.apexBias || 0.6; // 0..1
     const jitA = prof.jitterAmp || 0.05;
     const jitF = prof.jitterFreq || 0.8;
-    const jitterScale = clamp(1 - Math.min(speed / (SOFT_SPEED_CAP * 1.1), 1), 0.2, 1);
+    const jitterScale = clamp(1 - Math.min(speed / (SOFT_SPEED_CAP * 1.25), 1), 0.15, 1);
     const jitter = Math.sin(p.aiT * (2 * Math.PI * jitF) + p.aiPhase) * (jitA * w2 * jitterScale);
     let offset = (laneBias * (w2 * 0.7)) - (apexBias * curveF * (w2 * 0.6)) + jitter;
 
@@ -585,19 +753,28 @@ class Room {
       const d2 = dx*dx + dy*dy;
       if (d2 < bestDist2) { bestDist2 = d2; nearestAhead = q; }
     }
-    if (nearestAhead && bestDist2 < 220*220) {
+    if (nearestAhead && bestDist2 < 240 * 240) {
       const qPol = worldToTrackPolar(nearestAhead.x, nearestAhead.y);
       // If target car is inside, we bias outside (and vice versa)
       const isInside = qPol.r < rCenter;
       const sideBias = (isInside ? +1 : -1) * (0.4 * w2);
       offset += sideBias;
       // extra brake when very close
-      if (bestDist2 < 110*110) { p.brake = 1; p.throttle = 0; }
+      if (bestDist2 < 110 * 110) { p.brake = Math.max(p.brake, 0.6); p.throttle = 0; }
     }
 
     // Clamp offset inside track width margins
     const margin = Math.max(CAR_RADIUS + 4, w2 * 0.1);
+    const curveAhead = Math.max(kappa, kappa2 * 1.1, kappa3 * 1.2);
+    const tightness = clamp(curveAhead * this.track.width * 120, 0, 1);
+    offset *= clamp(1 - tightness * 0.55, 0.3, 1);
+
     offset = clamp(offset, -w2 + margin, +w2 - margin);
+
+    const desiredLane = clamp(offset / w2, -0.92, 0.92);
+    const laneResponse = clamp(dt * 5.5, 0, 1);
+    p.aiLane = (p.aiLane == null) ? desiredLane : clamp(p.aiLane + (desiredLane - p.aiLane) * laneResponse, -1, 1);
+    offset = p.aiLane * w2;
 
     // Target point in world
     const desiredR = rCenter + offset;
@@ -624,11 +801,19 @@ class Room {
     const kGrow = Math.max(kappa2 - kappa, kappa3 - kappa2); // tightening
     if (kGrow > 0) vCorner *= clamp(1 - kGrow * 140, 0.55, 1); // pre-brake on tightening
     if (curveF > 0.45) vCorner *= clamp(1 - curveF * 0.3, 0.55, 1);
-    const lanePenalty = 1 - Math.min(Math.abs(laneFrac) * 0.6, 0.45);
+    const lanePenalty = 1 - Math.min(Math.abs(laneFrac) * 0.55, 0.45);
     vCorner *= lanePenalty;
     const topSpeedLimit = p.isBot ? BOT_MAX_SPEED : MAX_SPEED;
-    const vMax = Math.min(topSpeedLimit, Math.max(SOFT_SPEED_CAP + 35, prof.maxSpeed || topSpeedLimit));
-    const target = Math.min(vCorner, vMax);
+    const vMax = Math.min(topSpeedLimit, Math.max(SOFT_SPEED_CAP + 52, prof.maxSpeed || topSpeedLimit));
+    let target = Math.min(vCorner, vMax);
+    if (nearestAhead && bestDist2 < 320 * 320) {
+      const draftBoost = clamp(1 - (bestDist2 / (320 * 320)), 0, 0.12);
+      target = Math.min(target * (1 + draftBoost), vMax);
+    }
+    if (Math.abs(p.aiLane || 0) > 0.7) {
+      const penalty = clamp(1 - (Math.abs(p.aiLane) - 0.7) * 1.8, 0.45, 1);
+      target *= penalty;
+    }
     const over = speed - target;
     const margin2 = 1.6 + (prof.brakeAgg || 0.8) * 2.0;
     // Slip-aware throttle
@@ -643,14 +828,14 @@ class Room {
 
     let throttleCmd = 0;
     let brakeCmd = 0;
-    if (edgeSeverity > 0.2 && speed > 40) brakeCmd = 0.5;
-    else if (over > margin2) brakeCmd = Math.min(1, over / (margin2 * 2.5));
+    if (edgeSeverity > 0.22 && speed > 44) brakeCmd = 0.45;
+    else if (over > margin2) brakeCmd = Math.min(1, over / (margin2 * 2.8));
     else if (slip > slipBrakeThreshold) brakeCmd = 0.35;
 
     if (!brakeCmd) {
       const speedGap = target - speed;
       if (speedGap > -1) {
-        const desired = clamp((speedGap + 12) / 6, 0, 1) * throttleAgg;
+        const desired = clamp((speedGap + 14) / 5.4, 0, 1) * throttleAgg;
         throttleCmd = Math.max(throttleCmd, desired);
       }
     }
@@ -764,6 +949,13 @@ class Room {
       this.emptySince = now;
       this.finishedAt = null;
       this.results = null;
+      if (!this.isCampaign && !this.isCustom) {
+        this.autoFillBotsAdded = false;
+        this.nextAutoFillAt = this.waitingSince + AUTO_FILL_WAIT_MS;
+      } else {
+        this.autoFillBotsAdded = true;
+        this.nextAutoFillAt = null;
+      }
       for (const p of this.players.values()) {
         const spawn = this.spawnPoint();
         p.x = spawn.x; p.y = spawn.y; p.angle = spawn.angle;
@@ -775,22 +967,59 @@ class Room {
     // Auto-start after timeout with whoever is present
     if (this.state === 'waiting') {
       const humans = this.humanCount;
+      if (!this.isCampaign && !this.isCustom) {
+        if (this.nextAutoFillAt == null && this.waitingSince) {
+          this.nextAutoFillAt = this.waitingSince + AUTO_FILL_WAIT_MS;
+        }
+        const minDrivers = Math.min(this.minPlayersToStart, this.maxPlayers);
+        const totalDrivers = this.players.size;
+        if (humans > 0 && totalDrivers >= minDrivers) {
+          this.autoFillBotsAdded = true;
+        } else if (humans > 0 && !this.autoFillBotsAdded && this.nextAutoFillAt && now >= this.nextAutoFillAt) {
+          const missing = Math.max(0, Math.min(minDrivers - totalDrivers, this.maxPlayers - totalDrivers));
+          if (missing > 0) {
+            const added = this.addAutoFillBots(missing);
+            if (added.length > 0) {
+              this.autoFillBotsAdded = true;
+              this.state = 'countdown';
+              this.countdownEndAt = now + COUNTDOWN_MS;
+              this.waitingSince = null;
+              this.nextAutoFillAt = null;
+              this.addChatMessage({ name: 'Server', color: '#888', text: `Added ${added.length} AI drivers to start the race.`, system: true });
+            } else {
+              this.autoFillBotsAdded = true;
+            }
+          } else {
+            this.autoFillBotsAdded = true;
+          }
+        }
+      }
       if (humans >= 1 && this.waitingSince && (now - this.waitingSince) >= AUTO_START_WAIT_MS) {
         this.state = 'countdown';
         this.countdownEndAt = now + COUNTDOWN_MS;
         this.waitingSince = null;
+        this.nextAutoFillAt = null;
+        this.autoFillBotsAdded = true;
       }
     }
 
-    // If not running, freeze players
-    const allowSim = this.state === 'running';
+    // Allow practice driving during waiting state, but freeze during countdown/finished phases
+    const allowSim = this.state === 'running' || (this.state === 'waiting' && !this.isCampaign);
 
     for (const p of this.players.values()) {
       if (!allowSim) {
-        // Keep players stationary during waiting/countdown
+        // Keep players stationary during countdown or post-race states
         p.vx = 0; p.vy = 0; // don't change angle either
         continue;
       }
+
+      const w2 = this.track.width / 2;
+      let pol = worldToTrackPolar(p.x, p.y);
+      const rc = rAt(pol.theta, this.track);
+      const laneOffsetNow = pol.r - rc;
+      const laneFrac = w2 ? clamp(laneOffsetNow / w2, -1, 1) : 0;
+      const surface = this.surfaceModifiers(pol.theta, laneFrac);
+
       // Local vectors
       const fx = Math.cos(p.angle);
       const fy = Math.sin(p.angle);
@@ -811,15 +1040,30 @@ class Room {
       p.throttleState = p.throttleState + ((p.targetThrottle||0) - p.throttleState) * thrAmt;
 
       // Speed-aware steering: more stable at high speed
+      const steerMul = surface ? (surface.steerMul || 1) : 1;
       const damp = 1 / (1 + Math.pow(speed / VREF, 1.2)); // 0..1
-      const turnRate = MAX_TURN_RATE * damp;
+      const turnRate = MAX_TURN_RATE * damp * steerMul;
       p.angle += p.steerState * turnRate * dt;
 
       // Acceleration / braking
       let ax = 0, ay = 0;
       let throttleEff = p.throttleState;
-      const speedCap = p.isBot ? BOT_MAX_SPEED : MAX_SPEED;
+      if (surface) {
+        const mul = surface.throttleMul != null ? surface.throttleMul : 1;
+        const add = surface.throttleAdd || 0;
+        throttleEff = throttleEff * mul + add;
+      }
+      throttleEff = clamp(throttleEff, 0, 1.4);
+
+      let speedCap = p.isBot ? BOT_MAX_SPEED : MAX_SPEED;
+      if (surface) {
+        const mul = surface.speedCapMul != null ? surface.speedCapMul : 1;
+        const add = surface.speedCapAdd || 0;
+        speedCap = speedCap * mul + add;
+      }
+      speedCap = clamp(speedCap, 60, BOT_MAX_SPEED + 100);
       const extendedRange = Math.max(0, speedCap - SOFT_SPEED_CAP);
+
       if (throttleEff > 0 && speed > SOFT_SPEED_CAP && extendedRange > 0) {
         const over = Math.min(speed - SOFT_SPEED_CAP, extendedRange);
         const ratio = over / extendedRange;
@@ -830,7 +1074,9 @@ class Room {
         ax += fx * ACCEL * throttleEff;
         ay += fy * ACCEL * throttleEff;
       }
-      const brakeStrength = clamp(p.brake || 0, 0, 1);
+
+      const brakeMul = surface ? (surface.brakeMul || 1) : 1;
+      const brakeStrength = clamp((p.brake || 0) * brakeMul, 0, 1);
       if (brakeStrength > 0) {
         // project velocity onto forward and apply braking or reverse accel
         const vdotf = p.vx * fx + p.vy * fy;
@@ -845,11 +1091,25 @@ class Room {
         }
       }
 
+      if (surface) {
+        if (surface.forwardAccel) {
+          ax += fx * surface.forwardAccel;
+          ay += fy * surface.forwardAccel;
+        }
+        if (surface.lateralAccel) {
+          ax += sx * surface.lateralAccel;
+          ay += sy * surface.lateralAccel;
+        }
+      }
+
       p.vx += ax * dt;
       p.vy += ay * dt;
 
       // Base drag
-      const dragPow = Math.pow(DRAG, dt / (1 / 60));
+      let dragPow = Math.pow(DRAG, dt / (1 / 60));
+      if (surface) {
+        dragPow = Math.pow(dragPow, surface.dragMul || 1);
+      }
       p.vx *= dragPow;
       p.vy *= dragPow;
 
@@ -857,7 +1117,10 @@ class Room {
       if (speed > SOFT_SPEED_CAP && extendedRange > 0) {
         const over = Math.min(speed - SOFT_SPEED_CAP, extendedRange);
         const ratio = over / extendedRange;
-        const extraDrag = Math.exp(-Math.max(0, ratio) * ratio * 4 * dt);
+        let extraDrag = Math.exp(-Math.max(0, ratio) * ratio * 4 * dt);
+        if (surface) {
+          extraDrag = Math.pow(extraDrag, surface.dragMul || 1);
+        }
         p.vx *= extraDrag;
         p.vy *= extraDrag;
         speed = Math.hypot(p.vx, p.vy);
@@ -866,14 +1129,15 @@ class Room {
       // Lateral grip: damp sideways velocity, less at high speed
       const vSide = p.vx * sx + p.vy * sy;
       const vFwd = p.vx * fx + p.vy * fy;
-      const grip = GRIP_LOW_SPEED + (GRIP_HIGH_SPEED - GRIP_LOW_SPEED) * clamp(speed / 900, 0, 1);
+      let grip = GRIP_LOW_SPEED + (GRIP_HIGH_SPEED - GRIP_LOW_SPEED) * clamp(speed / 900, 0, 1);
+      const gripMul = surface ? (surface.gripMul || 1) : 1;
+      grip *= gripMul;
       const sideAfter = vSide * Math.exp(-Math.max(0, grip) * dt);
       // Recompose
       p.vx = fx * vFwd + sx * sideAfter;
       p.vy = fy * vFwd + sy * sideAfter;
 
       // Curvature-based corner speed handling
-      const pol = worldToTrackPolar(p.x, p.y);
       const seg = segmentAtTheta(pol.theta, this.track);
       const kappa = curvatureAt(pol.theta, this.track); // 1/units
       let aLatMax = ALAT_MED;
@@ -886,11 +1150,15 @@ class Room {
           default: aLatMax = ALAT_MED; break;
         }
       }
+      aLatMax *= clamp(gripMul, 0.15, 2.5);
       const vmaxCorner = Math.sqrt(aLatMax / Math.max(kappa, 1e-6));
       if (speed > vmaxCorner) {
         // Extra drag when exceeding corner speed; also reduce steering authority (understeer)
         const excess = clamp((speed - vmaxCorner) / Math.max(vmaxCorner, 1), 0, 3);
-        const extraDrag = Math.exp(-excess * 3.0 * dt);
+        let extraDrag = Math.exp(-excess * 3.0 * dt);
+        if (surface) {
+          extraDrag = Math.pow(extraDrag, surface.dragMul || 1);
+        }
         p.vx *= extraDrag;
         p.vy *= extraDrag;
         // Reduce steer state temporarily
@@ -902,9 +1170,14 @@ class Room {
         const vSide2 = p.vx * sx + p.vy * sy;
         const vFwd2 = p.vx * fx + p.vy * fy;
         const slip = Math.abs(vSide2) / (Math.abs(vFwd2) + 1);
-        const cap = (p.isBot ? BOT_MAX_SPEED : SOFT_SPEED_CAP) * SLIDE_CAP_FACTOR;
+        let slipLimit = SLIDE_THRESHOLD;
+        if (surface) {
+          slipLimit = slipLimit * (surface.slipThresholdMul || 1) + (surface.slipThresholdAdd || 0);
+        }
+        slipLimit = clamp(slipLimit, 0.2, 0.95);
+        const cap = speedCap * SLIDE_CAP_FACTOR;
         const spd = Math.hypot(p.vx, p.vy);
-        if (slip > SLIDE_THRESHOLD && spd > cap) {
+        if (slip > slipLimit && spd > cap) {
           const s = cap / (spd || 1);
           p.vx *= s; p.vy *= s;
         }
@@ -912,9 +1185,8 @@ class Room {
 
       // Speed cap (forward magnitude) and reverse cap along forward axis
       const newSpeed = Math.hypot(p.vx, p.vy);
-      const capSpeed = p.isBot ? BOT_MAX_SPEED : MAX_SPEED;
-      if (newSpeed > capSpeed) {
-        const s = capSpeed / newSpeed;
+      if (newSpeed > speedCap) {
+        const s = speedCap / newSpeed;
         p.vx *= s; p.vy *= s;
       }
       // Limit reverse: clamp forward component not to exceed MAX_REVERSE_SPEED
@@ -935,10 +1207,9 @@ class Room {
       // Track boundary collision (ring with variable radius)
       // Recompute polar AFTER integration for accurate contact
       const pol2 = worldToTrackPolar(p.x, p.y);
-      const rc = rAt(pol2.theta, this.track);
-      const w2 = this.track.width / 2;
-      const minR = rc - w2 + CAR_RADIUS;
-      const maxR = rc + w2 - CAR_RADIUS;
+      const rcBoundary = rAt(pol2.theta, this.track);
+      const minR = rcBoundary - w2 + CAR_RADIUS;
+      const maxR = rcBoundary + w2 - CAR_RADIUS;
       let r = pol2.r;
 
       if (r < minR || r > maxR) {
@@ -987,7 +1258,7 @@ class Room {
         let vtanx = vtan0x * scrape;
         let vtany = vtan0y * scrape;
         // Cap sliding speed along wall to <= 50% of max speed (or absolute cap)
-        const wallCapBase = p.isBot ? BOT_MAX_SPEED : SOFT_SPEED_CAP;
+        const wallCapBase = Math.min(speedCap, p.isBot ? BOT_MAX_SPEED : SOFT_SPEED_CAP);
         const capAlongWall = Math.min(WALL_SLIDE_MAX, wallCapBase * 0.5);
         const vtanSpeed = Math.hypot(vtanx, vtany);
         if (vtanSpeed > capAlongWall) {
@@ -1009,39 +1280,52 @@ class Room {
         p.vy = vtany + vrad * uy;
       }
 
-      // Progress and laps tracking
-      const theta = pol.theta;
-      // Determine direction using tangential unit
-      const tx = -Math.sin(theta), ty = Math.cos(theta);
-      const forward = (p.vx * tx + p.vy * ty) >= 0; // moving along increasing theta
-      // wrap detection with lap arming (must pass mid-track before counting)
-      const TAU = Math.PI * 2;
-      const startTheta = (this.track && typeof this.track.startTheta === 'number') ? this.track.startTheta : 0;
-      const rel = ((theta - startTheta) % TAU + TAU) % TAU; // 0..TAU
-      const lastRel = ((p.lastTheta - startTheta) % TAU + TAU) % TAU;
-      // Arm when car reaches opposite half of track (between 90 and 270 degrees from start)
-      if (rel > TAU * 0.25 && rel < TAU * 0.75) p.lapArmed = true;
-      // Count lap only when armed and crossing start forward
-      if (p.lapArmed && lastRel > TAU * 0.75 && rel < TAU * 0.25 && forward) {
-        p.laps += 1;
+      // Refresh polar coordinates after potential wall resolution
+      pol = worldToTrackPolar(p.x, p.y);
+
+      if (this.state === 'running') {
+        // Progress and laps tracking while the race is active
+        const theta = pol.theta;
+        // Determine direction using tangential unit
+        const tx = -Math.sin(theta), ty = Math.cos(theta);
+        const forward = (p.vx * tx + p.vy * ty) >= 0; // moving along increasing theta
+        // wrap detection with lap arming (must pass mid-track before counting)
+        const TAU = Math.PI * 2;
+        const startTheta = (this.track && typeof this.track.startTheta === 'number') ? this.track.startTheta : 0;
+        const rel = ((theta - startTheta) % TAU + TAU) % TAU; // 0..TAU
+        const lastRel = ((p.lastTheta - startTheta) % TAU + TAU) % TAU;
+        // Arm when car reaches opposite half of track (between 90 and 270 degrees from start)
+        if (rel > TAU * 0.25 && rel < TAU * 0.75) p.lapArmed = true;
+        // Count lap only when armed and crossing start forward
+        if (p.lapArmed && lastRel > TAU * 0.75 && rel < TAU * 0.25 && forward) {
+          p.laps += 1;
+          p.lapArmed = false;
+          if (p.lapStartAt) {
+            const lapMs = now - p.lapStartAt;
+            p.lastLapMs = lapMs;
+            if (p.bestLapMs == null || lapMs < p.bestLapMs) p.bestLapMs = lapMs;
+          }
+          p.lapStartAt = now;
+          if (this.stats && !this.isCampaign && !p.isBot) {
+            this.stats.addLap(p.name, 1);
+          }
+          if (this.stats && !p.isBot && p.bestLapMs != null) {
+            this.stats.updateBestLap(p.name, p.bestLapMs);
+          }
+        }
+        // Do not allow negative lap exploit; still track reverse crossing but keep >= 0
+        if (lastRel < TAU * 0.25 && rel > TAU * 0.75 && !forward) p.laps = Math.max(0, p.laps - 1);
+        p.lastTheta = theta;
+        p.progress = p.laps * TAU + theta;
+      } else if (this.state === 'waiting') {
+        // Practice laps should not accumulate race stats
+        p.laps = 0;
+        p.progress = 0;
+        p.lastLapMs = 0;
+        p.bestLapMs = null;
         p.lapArmed = false;
-        if (p.lapStartAt) {
-          const lapMs = now - p.lapStartAt;
-          p.lastLapMs = lapMs;
-          if (p.bestLapMs == null || lapMs < p.bestLapMs) p.bestLapMs = lapMs;
-        }
-        p.lapStartAt = now;
-        if (this.stats && !this.isCampaign && !p.isBot) {
-          this.stats.addLap(p.name, 1);
-        }
-        if (this.stats && !p.isBot && p.bestLapMs != null) {
-          this.stats.updateBestLap(p.name, p.bestLapMs);
-        }
+        p.lastTheta = pol.theta;
       }
-      // Do not allow negative lap exploit; still track reverse crossing but keep >= 0
-      if (lastRel < TAU * 0.25 && rel > TAU * 0.75 && !forward) p.laps = Math.max(0, p.laps - 1);
-      p.lastTheta = theta;
-      p.progress = p.laps * TAU + theta;
     }
   }
 

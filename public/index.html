@@ -146,13 +146,21 @@
     <div id="speedDial" class="hidden">0</div>
     <canvas id="minimap" class="hidden"></canvas>
     <div id="touchControls" class="hidden">
-      <div class="tc-left">
-        <button id="btnLeft" class="tc-btn">◀</button>
-        <button id="btnRight" class="tc-btn">▶</button>
+      <div id="touchSteer" class="tc-steer">
+        <div class="tc-joystick-base">
+          <div class="tc-joystick-thumb"></div>
+        </div>
+        <div class="tc-steer-label">Steer</div>
       </div>
-      <div class="tc-right">
-        <button id="btnBrake" class="tc-btn">▮▮</button>
-        <button id="btnGas" class="tc-btn">▲</button>
+      <div id="touchPedals" class="tc-pedals">
+        <div id="touchPedalBrake" class="tc-pedal tc-pedal--brake">
+          <div class="tc-pedal-fill"></div>
+          <span>Brake</span>
+        </div>
+        <div id="touchPedalAccel" class="tc-pedal tc-pedal--accel">
+          <div class="tc-pedal-fill"></div>
+          <span>Throttle</span>
+        </div>
       </div>
     </div>
 

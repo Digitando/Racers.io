@@ -331,22 +331,128 @@ button.secondary { background: #e0e0e0; color: #222; }
   pointer-events: none;
   z-index: 6;
 }
-.tc-left, .tc-right { position: absolute; bottom: 18px; display: flex; gap: 12px; }
-.tc-left { left: 18px; }
-.tc-right { right: 18px; flex-direction: column; }
-.tc-btn {
-  pointer-events: all;
-  width: 72px; height: 72px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(255,255,255,0.92);
-  box-shadow: 0 6px 20px rgba(0,0,0,0.12);
-  font-size: 22px; font-weight: 700;
+
+.tc-steer {
+  position: absolute;
+  left: 22px;
+  bottom: 26px;
+  width: 190px;
+  height: 210px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 14px;
+  pointer-events: none;
 }
-.tc-btn:active { transform: scale(0.96); }
-.tc-btn.active { background: rgba(255,255,255,1); box-shadow: 0 8px 26px rgba(0,0,0,0.18); }
+
+.tc-joystick-base {
+  width: 174px;
+  height: 174px;
+  border-radius: 50%;
+  background: rgba(12, 18, 32, 0.55);
+  border: 2px solid rgba(120, 192, 255, 0.45);
+  box-shadow: 0 18px 40px rgba(2, 12, 28, 0.55), inset 0 4px 18px rgba(120, 192, 255, 0.2);
+  position: relative;
+  backdrop-filter: blur(14px);
+  pointer-events: all;
+  touch-action: none;
+}
+
+.tc-joystick-thumb {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.8), rgba(120,180,255,0.55) 55%, rgba(30,50,88,0.9));
+  box-shadow: 0 10px 24px rgba(10, 20, 40, 0.5);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  transition: transform 0.12s ease-out;
+  pointer-events: none;
+}
+
+.tc-steer-label {
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(236, 244, 255, 0.82);
+  pointer-events: none;
+  text-shadow: 0 0 8px rgba(0, 200, 255, 0.35);
+}
+
+.tc-pedals {
+  position: absolute;
+  right: 22px;
+  bottom: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  pointer-events: none;
+}
+
+.tc-pedal {
+  width: 136px;
+  height: 154px;
+  border-radius: 24px;
+  background: rgba(12, 18, 32, 0.58);
+  border: 2px solid rgba(120, 192, 255, 0.28);
+  position: relative;
+  overflow: hidden;
+  pointer-events: all;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 14px;
+  color: rgba(236, 244, 255, 0.82);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  backdrop-filter: blur(12px);
+  touch-action: none;
+}
+
+.tc-pedal span {
+  pointer-events: none;
+  position: relative;
+  z-index: 2;
+  font-size: 12px;
+}
+
+.tc-pedal .tc-pedal-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0%;
+  z-index: 1;
+  opacity: 0.85;
+}
+
+.tc-pedal--accel .tc-pedal-fill {
+  background: linear-gradient(180deg, rgba(0, 255, 153, 0.6), rgba(0, 158, 255, 0.55));
+}
+
+.tc-pedal--brake .tc-pedal-fill {
+  background: linear-gradient(180deg, rgba(255, 120, 120, 0.7), rgba(140, 0, 0, 0.65));
+}
+
+.tc-pedal:active {
+  transform: scale(0.98);
+}
 
 @media (pointer: coarse) {
-  .tc-btn { width: 84px; height: 84px; font-size: 26px; }
-  .tc-left, .tc-right { bottom: 22px; }
+  .tc-joystick-base {
+    width: 196px;
+    height: 196px;
+  }
+  .tc-joystick-thumb {
+    width: 94px;
+    height: 94px;
+  }
+  .tc-steer { left: 26px; bottom: 30px; }
+  .tc-pedal { width: 152px; height: 172px; }
+  .tc-pedals { right: 26px; bottom: 30px; gap: 22px; }
+  .tc-pedal span { font-size: 13px; }
 }
